@@ -2,9 +2,6 @@
 
 use axum::Router;
 
-#[cfg(feature = "prometheus-metrics")]
-use std::sync::Arc;
-
 #[cfg(feature = "openapi")]
 pub(crate) fn mount_openapi(
     router: Router,
@@ -268,8 +265,12 @@ fn coerce_boolean_and_2020_schemas(val: &mut serde_json::Value) {
     }
 }
 
+/// Strip `content` from non-2xx response objects in an OpenAPI value.
+///
+/// Call this explicitly after [`to_3_0_pretty_json`] if you want to remove
+/// error response schemas from your spec (e.g., for progenitor compatibility).
 #[cfg(feature = "openapi")]
-fn strip_non_success_response_content(val: &mut serde_json::Value) {
+pub fn strip_non_success_response_content(val: &mut serde_json::Value) {
     if let Some(paths) = val
         .as_object_mut()
         .and_then(|root| root.get_mut("paths"))
@@ -305,28 +306,145 @@ pub(crate) fn to_3_0_pretty_json(api: utoipa::openapi::OpenApi) -> serde_json::R
     let mut val: serde_json::Value = serde_json::from_str(&json)?;
     coerce_boolean_and_2020_schemas(&mut val);
     rewrite_nullable_recursive(&mut val);
-    strip_non_success_response_content(&mut val);
     serde_json::to_string_pretty(&val)
 }
 
-/// Encode Prometheus metrics in text exposition format.
-#[cfg(feature = "prometheus-metrics")]
-pub(crate) async fn prometheus_scrape_handler(
-    axum::extract::State(registry): axum::extract::State<Arc<prometheus::Registry>>,
-) -> axum::response::Response {
-    use axum::http::{StatusCode, header};
-    use axum::response::IntoResponse;
-    use prometheus::{Encoder, TextEncoder};
+#[cfg(all(test, feature = "openapi"))]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use utoipa::openapi::OpenApiBuilder;
 
-    let encoder = TextEncoder::new();
-    let metric_families = registry.gather();
-    let mut buf = Vec::new();
-    if let Err(e) = encoder.encode(&metric_families, &mut buf) {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("prometheus encode failed: {e}"),
-        )
-            .into_response();
+    fn empty_api() -> utoipa::openapi::OpenApi {
+        OpenApiBuilder::new()
+            .info(
+                utoipa::openapi::InfoBuilder::new()
+                    .title("test")
+                    .version("0.1.0")
+                    .build(),
+            )
+            .build()
     }
-    ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], buf).into_response()
+
+    #[test]
+    fn merge_health_paths_adds_live_and_ready() {
+        let api = merge_health_paths(empty_api(), "/health");
+        assert!(api.paths.paths.contains_key("/health/live"));
+        assert!(api.paths.paths.contains_key("/health/ready"));
+    }
+
+    #[test]
+    fn merge_health_paths_adds_health_tag() {
+        let api = merge_health_paths(empty_api(), "/health");
+        let tags = api.tags.unwrap_or_default();
+        assert!(tags.iter().any(|t| t.name == "health"));
+    }
+
+    #[test]
+    fn merge_health_paths_idempotent_tag() {
+        let api = merge_health_paths(empty_api(), "/health");
+        let api = merge_health_paths(api, "/health");
+        let count = api
+            .tags
+            .unwrap_or_default()
+            .iter()
+            .filter(|t| t.name == "health")
+            .count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn merge_health_paths_custom_base_path() {
+        let api = merge_health_paths(empty_api(), "/hc");
+        assert!(api.paths.paths.contains_key("/hc/live"));
+        assert!(api.paths.paths.contains_key("/hc/ready"));
+    }
+
+    #[test]
+    fn rewrite_nullable_rewrites_type_array() {
+        let input = json!({ "openapi": "3.1.0", "components": { "schemas": { "Foo": { "type": ["string", "null"] } } } });
+        let out = rewrite_nullable_for_progenitor(serde_json::to_string(&input).unwrap());
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["components"]["schemas"]["Foo"]["type"], "string");
+        assert_eq!(v["components"]["schemas"]["Foo"]["nullable"], true);
+    }
+
+    #[test]
+    fn rewrite_nullable_downgrades_openapi_version() {
+        let input = json!({ "openapi": "3.1.0" });
+        let out = rewrite_nullable_for_progenitor(serde_json::to_string(&input).unwrap());
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["openapi"], "3.0.3");
+    }
+
+    #[test]
+    fn rewrite_nullable_removes_license_identifier() {
+        let input = json!({ "openapi": "3.1.0", "info": { "license": { "name": "MIT", "identifier": "MIT" } } });
+        let out = rewrite_nullable_for_progenitor(serde_json::to_string(&input).unwrap());
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!(v["info"]["license"].get("identifier").is_none());
+    }
+
+    #[test]
+    fn rewrite_nullable_invalid_json_returns_unchanged() {
+        let bad = "not json at all".to_string();
+        assert_eq!(rewrite_nullable_for_progenitor(bad.clone()), bad);
+    }
+
+    #[test]
+    fn rewrite_nullable_handles_anyof_with_null_arm() {
+        let input = json!({ "openapi": "3.1.0", "components": { "schemas": { "Bar": { "anyOf": [{ "type": "string" }, { "type": "null" }] } } } });
+        let out = rewrite_nullable_for_progenitor(serde_json::to_string(&input).unwrap());
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let bar = &v["components"]["schemas"]["Bar"];
+        assert_eq!(bar["nullable"], true);
+        assert!(bar.get("anyOf").is_none());
+    }
+
+    #[test]
+    fn strip_non_success_removes_error_content() {
+        let mut val = json!({
+            "paths": { "/users": { "get": { "responses": {
+                "200": { "content": { "application/json": {} } },
+                "404": { "content": { "application/problem+json": {} } }
+            }}}}
+        });
+        strip_non_success_response_content(&mut val);
+        assert!(val["paths"]["/users"]["get"]["responses"]["200"]["content"].is_object());
+        assert!(
+            val["paths"]["/users"]["get"]["responses"]["404"]
+                .get("content")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn to_3_0_pretty_json_produces_valid_json() {
+        let result = to_3_0_pretty_json(empty_api());
+        assert!(result.is_ok());
+        let v: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert!(v.get("openapi").is_some());
+    }
+
+    #[test]
+    fn coerce_boolean_schema_true_becomes_empty_object() {
+        let mut val = json!({ "additionalProperties": true });
+        coerce_boolean_and_2020_schemas(&mut val);
+        assert_eq!(val["additionalProperties"], json!({}));
+    }
+
+    #[test]
+    fn coerce_boolean_schema_false_removes_key() {
+        let mut val = json!({ "additionalProperties": false });
+        coerce_boolean_and_2020_schemas(&mut val);
+        assert!(val.get("additionalProperties").is_none());
+    }
+
+    #[test]
+    fn coerce_removes_2020_keywords() {
+        let mut val = json!({ "unevaluatedProperties": {}, "$schema": "http://example.com" });
+        coerce_boolean_and_2020_schemas(&mut val);
+        assert!(val.get("unevaluatedProperties").is_none());
+        assert!(val.get("$schema").is_none());
+    }
 }

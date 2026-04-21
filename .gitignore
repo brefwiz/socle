@@ -1,2 +1,13 @@
 /target
-Cargo.lock
+lcov.info
+*.profraw
+*.profdata
+tarpaulin-report.*
+coverage/
+.env
+.env.*
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

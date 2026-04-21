@@ -1,17 +1,12 @@
 //! `serve()` implementation — wires adapters, binds the listener, runs until
 //! shutdown, then drains.
 
+use std::future::Future;
 use std::net::SocketAddr;
 
-#[cfg(feature = "prometheus-metrics")]
-use axum::Router;
-#[cfg(feature = "prometheus-metrics")]
-use std::sync::Arc;
-
-use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::bootstrap::builder::ServiceBootstrap;
+use crate::bootstrap::builder::{ServiceBootstrap, ShutdownHook};
 use crate::bootstrap::ctx::BootstrapCtx;
 use crate::error::{Error, Result};
 
@@ -19,19 +14,67 @@ impl ServiceBootstrap {
     /// Run the service. Initialises every enabled integration in dependency
     /// order, binds the listener, serves until SIGINT/SIGTERM, then drains.
     pub async fn serve(self, addr: impl Into<String>) -> Result<()> {
+        let addr: SocketAddr = addr
+            .into()
+            .parse()
+            .map_err(|e: std::net::AddrParseError| Error::Config(e.to_string()))?;
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| Error::Bind(e.to_string()))?;
+        tracing::info!(%addr, service = %self.service_name, "groundwork: listening");
+        self.serve_with_shutdown(listener, shutdown_signal()).await
+    }
+
+    /// Run the service using a pre-bound listener and a caller-supplied shutdown
+    /// future. Useful for integration tests where you need to bind on port 0
+    /// and control when the server stops.
+    ///
+    /// ```rust,no_run
+    /// use axum::{Router, routing::get};
+    /// use groundwork::{BootstrapCtx, Result, ServiceBootstrap};
+    /// use tokio::net::TcpListener;
+    ///
+    /// # #[tokio::main] async fn main() -> Result<()> {
+    /// let listener = TcpListener::bind("127.0.0.1:0").await?;
+    /// let addr = listener.local_addr()?;
+    /// ServiceBootstrap::new("my-service")
+    ///     .with_router(|_: &BootstrapCtx| Router::new().route("/", get(|| async { "ok" })))
+    ///     .serve_with_shutdown(listener, std::future::pending())
+    ///     .await
+    /// # }
+    /// ```
+    pub async fn serve_with_shutdown(
+        self,
+        listener: tokio::net::TcpListener,
+        shutdown: impl Future<Output = ()> + Send + 'static,
+    ) -> Result<()> {
         // 1. Telemetry first.
         #[cfg(feature = "telemetry")]
         if self.telemetry {
-            crate::adapters::telemetry::init_basic_tracing();
-        } else {
-            crate::adapters::telemetry::init_basic_tracing();
+            match self.telemetry_init {
+                Some(init_fn) => {
+                    init_fn(&self.service_name).map_err(|e| Error::Telemetry(e.to_string()))?
+                }
+                None => crate::adapters::observability::telemetry::init_basic_tracing(),
+            }
         }
-        #[cfg(not(feature = "telemetry"))]
-        crate::adapters::telemetry::init_basic_tracing();
 
-        // 2. Database pool.
+        // 2. Database pool — prefer pre-built pool over URL construction.
         #[cfg(feature = "database")]
-        let db: Option<sqlx::PgPool> = if let Some(ref url) = self.database_url {
+        let db: Option<sqlx::PgPool> = if let Some(pool) = self.db_pool {
+            if let Some(ref migrator) = self.migrator {
+                tracing::warn!(
+                    service = %self.service_name,
+                    "groundwork: running migrations in-process"
+                );
+                migrator
+                    .run(&pool)
+                    .await
+                    .map_err(|e| Error::Database(format!("migrate: {e}")))?;
+                tracing::info!("groundwork: migrations applied successfully");
+            }
+            Some(pool)
+        } else if let Some(ref url) = self.database_url {
             let pool = sqlx::PgPool::connect(url)
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
@@ -62,6 +105,7 @@ impl ServiceBootstrap {
             service_name: self.service_name.clone(),
             #[cfg(feature = "database")]
             db: db.clone(),
+            extensions: std::collections::HashMap::new(),
         };
 
         let router_builder = self
@@ -95,33 +139,26 @@ impl ServiceBootstrap {
         // 5. Apply layers.
         let mut app = user_router;
 
-        // Auth layer.
-        #[cfg(feature = "auth")]
-        if let Some(auth_layer) = self.auth_layer {
-            app = app.layer(auth_layer);
+        // Rate limit layer (innermost — runs closest to the user router).
+        #[cfg(feature = "ratelimit-memory")]
+        if let Some(cfg) = self.rate_limit {
+            use crate::adapters::security::rate_limit::RateLimitLayer;
+            app = app.layer(RateLimitLayer::new_memory(
+                cfg.limit,
+                cfg.window_secs,
+                self.ratelimit_extractor,
+            ));
+        }
+
+        // Extra layers registered via with_layer() — applied innermost first.
+        for layer_fn in self.extra_layers {
+            app = layer_fn(app);
         }
 
         // Enrich bare error responses.
         app = app.layer(axum::middleware::from_fn(
             crate::adapters::security::enrich_error::enrich_error_response,
         ));
-
-        // Prometheus /metrics endpoint.
-        #[cfg(feature = "prometheus-metrics")]
-        if self.prometheus_metrics {
-            let registry = Arc::new(prometheus::Registry::new());
-            let path = self.prometheus_path.clone();
-            app = app.merge(
-                Router::new()
-                    .route(
-                        &path,
-                        axum::routing::get(
-                            crate::adapters::openapi::prometheus_scrape_handler,
-                        ),
-                    )
-                    .with_state(registry),
-            );
-        }
 
         // Cross-cutting tower-http layers.
         use tower_http::catch_panic::CatchPanicLayer;
@@ -130,7 +167,6 @@ impl ServiceBootstrap {
         use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 
         let request_id_header = axum::http::HeaderName::from_static("x-request-id");
-        let cors = self.cors.unwrap_or_else(CorsLayer::permissive);
 
         let trace_layer =
             TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
@@ -143,10 +179,15 @@ impl ServiceBootstrap {
                 )
             });
 
+        // CORS is opt-in. Omitting with_cors_config() means no CORS headers are
+        // sent, which is safe for APIs not accessed from browsers.
+        if let Some(cors) = self.cors {
+            app = app.layer(cors);
+        }
+
         app = app
             .layer(CompressionLayer::new())
             .layer(RequestBodyLimitLayer::new(self.body_limit_bytes))
-            .layer(cors)
             .layer(CatchPanicLayer::custom(crate::handler_error::panic_handler))
             .layer(trace_layer)
             .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
@@ -156,59 +197,35 @@ impl ServiceBootstrap {
                 crate::request_id::MakeRequestUuidV7,
             ));
 
-        // 6. Bind & serve with graceful shutdown.
-        let addr: SocketAddr = addr
-            .into()
-            .parse()
-            .map_err(|e: std::net::AddrParseError| Error::Config(e.to_string()))?;
-        let listener = tokio::net::TcpListener::bind(addr)
-            .await
-            .map_err(|e| Error::Bind(e.to_string()))?;
-        tracing::info!(%addr, service = %self.service_name, "groundwork: listening");
-
+        // 6. Serve with caller-supplied shutdown signal.
         let shutdown_timeout = self.shutdown_timeout;
         let shutdown_hooks = self.shutdown_hooks;
         let make_service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
-        let server = axum::serve(listener, make_service).with_graceful_shutdown(shutdown_signal());
+        let server = axum::serve(listener, make_service).with_graceful_shutdown(shutdown);
 
-        tokio::select! {
-            res = server => {
-                res.map_err(|e| Error::Serve(e.to_string()))?;
-            }
-            () = async {
-                shutdown_signal().await;
-                tokio::time::sleep(shutdown_timeout).await;
-            } => {
-                tracing::error!(
-                    timeout_secs = shutdown_timeout.as_secs(),
-                    "groundwork: shutdown deadline exceeded"
-                );
-            }
-        }
+        server.await.map_err(|e| Error::Serve(e.to_string()))?;
 
-        // 7. Run user-registered shutdown hooks in reverse registration order.
-        for hook in shutdown_hooks.into_iter().rev() {
-            tracing::info!(hook = %hook.name, "groundwork: running shutdown hook");
-            match tokio::time::timeout(hook.timeout, (hook.hook)()).await {
-                Ok(()) => {
-                    tracing::info!(hook = %hook.name, "groundwork: shutdown hook completed");
-                }
-                Err(_) => {
-                    tracing::error!(
-                        hook = %hook.name,
-                        timeout_secs = hook.timeout.as_secs(),
-                        "groundwork: shutdown hook timed out"
-                    );
-                }
-            }
-        }
-
+        run_shutdown_hooks(shutdown_hooks, shutdown_timeout).await;
         tracing::info!("groundwork: shutdown complete");
         Ok(())
     }
 }
 
-async fn shutdown_signal() {
+async fn run_shutdown_hooks(hooks: Vec<ShutdownHook>, _default_timeout: std::time::Duration) {
+    for hook in hooks.into_iter().rev() {
+        tracing::info!(hook = %hook.name, "groundwork: running shutdown hook");
+        match tokio::time::timeout(hook.timeout, (hook.hook)()).await {
+            Ok(()) => tracing::info!(hook = %hook.name, "groundwork: shutdown hook completed"),
+            Err(_) => tracing::error!(
+                hook = %hook.name,
+                timeout_secs = hook.timeout.as_secs(),
+                "groundwork: shutdown hook timed out"
+            ),
+        }
+    }
+}
+
+pub(crate) async fn shutdown_signal() {
     use tokio::signal;
     let ctrl_c = async {
         signal::ctrl_c().await.ok();

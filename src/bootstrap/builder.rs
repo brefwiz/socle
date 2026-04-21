@@ -16,6 +16,7 @@ use crate::adapters::security::rate_limit::{RateLimitBackend, RateLimitExtractor
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 pub(crate) type RouterBuilder = Box<dyn FnOnce(&BootstrapCtx) -> Router + Send>;
+pub(crate) type TelemetryInitFn = Box<dyn FnOnce(&str) -> crate::error::Result<()> + Send>;
 
 /// Async drain callback registered via [`ServiceBootstrap::with_shutdown_hook`].
 pub type ShutdownHookFn =
@@ -49,29 +50,25 @@ pub struct ServiceBootstrap {
 
     #[cfg(feature = "telemetry")]
     pub(crate) telemetry: bool,
-
-    #[cfg(feature = "prometheus-metrics")]
-    pub(crate) prometheus_metrics: bool,
-    #[cfg(feature = "prometheus-metrics")]
-    pub(crate) prometheus_path: String,
+    /// Override for telemetry initialisation. When set, called instead of
+    /// `init_basic_tracing()`. Receives the service name.
+    pub(crate) telemetry_init: Option<TelemetryInitFn>,
 
     #[cfg(feature = "database")]
     pub(crate) database_url: Option<String>,
     #[cfg(feature = "database")]
+    pub(crate) db_pool: Option<sqlx::PgPool>,
+    #[cfg(feature = "database")]
     pub(crate) migrator: Option<sqlx::migrate::Migrator>,
+
+    /// Extra tower layers applied to the router just before the cross-cutting
+    /// tower-http stack. Applied in registration order (first registered = innermost).
+    pub(crate) extra_layers: Vec<Box<dyn FnOnce(Router) -> Router + Send>>,
 
     #[cfg(feature = "ratelimit")]
     pub(crate) rate_limit: Option<RateLimitBackend>,
     #[cfg(feature = "ratelimit")]
     pub(crate) ratelimit_extractor: RateLimitExtractor,
-    #[cfg(feature = "ratelimit")]
-    pub(crate) ratelimit_fail_open: bool,
-    #[cfg(feature = "ratelimit")]
-    pub(crate) ratelimit_burst: Option<u64>,
-    #[cfg(feature = "ratelimit")]
-    pub(crate) ratelimit_algorithm: Option<String>,
-    #[cfg(feature = "ratelimit")]
-    pub(crate) ratelimit_retry_after_jitter_pct: f64,
 
     pub(crate) cors: Option<CorsLayer>,
     pub(crate) router_builder: Option<RouterBuilder>,
@@ -89,41 +86,27 @@ pub struct ServiceBootstrap {
     pub(crate) openapi_spec_path: String,
     #[cfg(feature = "openapi")]
     pub(crate) openapi_ui_path: String,
-
-    #[cfg(feature = "auth")]
-    pub(crate) auth_layer: Option<crate::auth::AuthLayer>,
 }
 
 impl ServiceBootstrap {
     /// Start a new bootstrap for a service.
     pub fn new(service_name: impl Into<Arc<str>>) -> Self {
-        #[cfg(feature = "dotenv")]
-        let _ = dotenvy::dotenv();
-
         Self {
             service_name: service_name.into(),
             #[cfg(feature = "telemetry")]
             telemetry: false,
-            #[cfg(feature = "prometheus-metrics")]
-            prometheus_metrics: false,
-            #[cfg(feature = "prometheus-metrics")]
-            prometheus_path: "/metrics".to_string(),
+            telemetry_init: None,
             #[cfg(feature = "database")]
             database_url: None,
             #[cfg(feature = "database")]
+            db_pool: None,
+            #[cfg(feature = "database")]
             migrator: None,
+            extra_layers: Vec::new(),
             #[cfg(feature = "ratelimit")]
             rate_limit: None,
             #[cfg(feature = "ratelimit")]
             ratelimit_extractor: RateLimitExtractor::Ip,
-            #[cfg(feature = "ratelimit")]
-            ratelimit_fail_open: true,
-            #[cfg(feature = "ratelimit")]
-            ratelimit_burst: None,
-            #[cfg(feature = "ratelimit")]
-            ratelimit_algorithm: None,
-            #[cfg(feature = "ratelimit")]
-            ratelimit_retry_after_jitter_pct: 0.0,
             cors: None,
             router_builder: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -139,9 +122,15 @@ impl ServiceBootstrap {
             openapi_spec_path: "/openapi.json".into(),
             #[cfg(feature = "openapi")]
             openapi_ui_path: "/docs".into(),
-            #[cfg(feature = "auth")]
-            auth_layer: None,
         }
+    }
+
+    /// Load `.env` file if present. Call this before any `with_*` methods that
+    /// read from environment variables.
+    #[cfg(feature = "dotenv")]
+    pub fn with_dotenv(self) -> Self {
+        let _ = dotenvy::dotenv();
+        self
     }
 
     /// Build from a [`BootstrapConfig`].
@@ -171,59 +160,11 @@ impl ServiceBootstrap {
         }
 
         #[cfg(feature = "ratelimit")]
-        {
-            let rl_cfg = cfg.rate_limit;
-            match rl_cfg.kind {
-                RateLimitKind::None => {}
-                #[cfg(feature = "ratelimit-memory")]
-                RateLimitKind::Memory { limit, window_secs } => {
-                    b = b.with_rate_limit(RateLimitBackend::Memory { limit, window_secs });
-                }
-                #[cfg(not(feature = "ratelimit-memory"))]
-                RateLimitKind::Memory { .. } => {
-                    return Err(Error::Config(
-                        "rate_limit=memory requires feature ratelimit-memory".into(),
-                    ));
-                }
-                #[cfg(feature = "ratelimit-postgres")]
-                RateLimitKind::Postgres { limit, window_secs } => {
-                    b = b.with_rate_limit(RateLimitBackend::Postgres { limit, window_secs });
-                }
-                #[cfg(not(feature = "ratelimit-postgres"))]
-                RateLimitKind::Postgres { .. } => {
-                    return Err(Error::Config(
-                        "rate_limit=postgres requires feature ratelimit-postgres".into(),
-                    ));
-                }
-                #[cfg(feature = "ratelimit-redis")]
-                RateLimitKind::Redis {
-                    url,
-                    limit,
-                    window_secs,
-                } => {
-                    b = b.with_rate_limit(RateLimitBackend::redis_from_url(
-                        &url,
-                        limit,
-                        window_secs,
-                    )?);
-                }
-                #[cfg(not(feature = "ratelimit-redis"))]
-                RateLimitKind::Redis { .. } => {
-                    return Err(Error::Config(
-                        "rate_limit=redis requires feature ratelimit-redis".into(),
-                    ));
-                }
+        match cfg.rate_limit.kind {
+            RateLimitKind::None => {}
+            RateLimitKind::Memory { limit, window_secs } => {
+                b = b.with_rate_limit(RateLimitBackend { limit, window_secs });
             }
-
-            if let Some(alg_str) = rl_cfg.algorithm {
-                b = b.with_rate_limit_algorithm(alg_str);
-            }
-
-            if let Some(burst) = rl_cfg.burst {
-                b = b.with_rate_limit_burst(burst);
-            }
-
-            b = b.with_rate_limit_retry_after_jitter_pct(rl_cfg.retry_after_jitter_pct);
         }
 
         Ok(b)
@@ -308,17 +249,23 @@ impl ServiceBootstrap {
         self
     }
 
-    /// Mount a Prometheus scrape endpoint at `GET /metrics`.
-    #[cfg(feature = "prometheus-metrics")]
-    pub fn with_prometheus_metrics(mut self) -> Self {
-        self.prometheus_metrics = true;
-        self
-    }
-
-    /// Override the default `/metrics` mount path.
-    #[cfg(feature = "prometheus-metrics")]
-    pub fn with_prometheus_path(mut self, path: impl Into<String>) -> Self {
-        self.prometheus_path = path.into();
+    /// Override the telemetry initialisation function.
+    ///
+    /// When set, called instead of the built-in `tracing_subscriber` setup.
+    /// Use this to wire in a full OTel SDK (e.g. `otel-bootstrap`) from a
+    /// wrapper crate without forking `serve()`.
+    ///
+    /// The callback receives the service name and must return `Ok(())` on
+    /// success or an [`Error`] that aborts startup.
+    ///
+    /// Implies [`with_telemetry`] — no need to call both.
+    #[cfg(feature = "telemetry")]
+    pub fn with_telemetry_init<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&str) -> crate::error::Result<()> + Send + 'static,
+    {
+        self.telemetry = true;
+        self.telemetry_init = Some(Box::new(f));
         self
     }
 
@@ -331,6 +278,18 @@ impl ServiceBootstrap {
         self
     }
 
+    /// Provide a pre-built `sqlx::PgPool` instead of a connection URL.
+    ///
+    /// Use this when the pool is constructed externally — for example by
+    /// `sqlx-switchboard`'s `PoolConfig` — so that `serve()` skips its own
+    /// pool construction. Takes precedence over [`with_database`] if both are
+    /// called.
+    #[cfg(feature = "database")]
+    pub fn with_db_pool(mut self, pool: sqlx::PgPool) -> Self {
+        self.db_pool = Some(pool);
+        self
+    }
+
     /// Run sqlx migrations at startup.
     #[cfg(feature = "database")]
     pub fn with_migrations(mut self, migrator: sqlx::migrate::Migrator) -> Self {
@@ -340,13 +299,25 @@ impl ServiceBootstrap {
 
     // ── Rate limiting ──────────────────────────────────────────────────────────
 
-    /// Enable rate limiting with the given store backend.
+    /// Enable the in-process GCRA rate limiter.
     ///
-    /// Note: the middleware is not yet wired into the tower stack.
-    /// This stores the configuration for future use. See the `ratelimit` module.
+    /// The limiter is applied as a tower layer inside `serve()`. By default it
+    /// keys on the remote IP address — see [`with_rate_limit_extractor`] to
+    /// change the extraction strategy.
+    ///
+    /// **Reverse-proxy note**: the default [`RateLimitExtractor::Ip`] reads the
+    /// L4 peer address, which is the proxy IP in production. All clients will
+    /// share one rate-limit bucket. Use
+    /// `with_rate_limit_extractor(RateLimitExtractor::Header("x-forwarded-for"))`
+    /// when the service runs behind a trusted reverse proxy.
+    ///
+    /// **Memory note**: the keyed limiter stores one entry per unique key with no
+    /// TTL or size cap. Avoid `RateLimitExtractor::Header` with attacker-controlled
+    /// headers in production; prefer `Ip` or a header with bounded cardinality.
+    ///
+    /// [`with_rate_limit_extractor`]: ServiceBootstrap::with_rate_limit_extractor
     #[cfg(feature = "ratelimit")]
     pub fn with_rate_limit(mut self, config: RateLimitBackend) -> Self {
-        // TODO: wire actual rate limiting middleware
         self.rate_limit = Some(config);
         self
     }
@@ -355,34 +326,6 @@ impl ServiceBootstrap {
     #[cfg(feature = "ratelimit")]
     pub fn with_rate_limit_extractor(mut self, extractor: RateLimitExtractor) -> Self {
         self.ratelimit_extractor = extractor;
-        self
-    }
-
-    /// Override the rate-limit algorithm (e.g. `"sliding_window"`, `"gcra"`).
-    #[cfg(feature = "ratelimit")]
-    pub fn with_rate_limit_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.ratelimit_algorithm = Some(algorithm.into());
-        self
-    }
-
-    /// Switch to fail-closed mode.
-    #[cfg(feature = "ratelimit")]
-    pub fn with_rate_limit_fail_closed(mut self) -> Self {
-        self.ratelimit_fail_open = false;
-        self
-    }
-
-    /// Apply uniform ±`pct` jitter to `Retry-After` on HTTP 429 responses.
-    #[cfg(feature = "ratelimit")]
-    pub fn with_rate_limit_retry_after_jitter_pct(mut self, pct: f64) -> Self {
-        self.ratelimit_retry_after_jitter_pct = pct;
-        self
-    }
-
-    /// Set a burst size for token-bucket and GCRA algorithms.
-    #[cfg(feature = "ratelimit")]
-    pub fn with_rate_limit_burst(mut self, burst: u64) -> Self {
-        self.ratelimit_burst = Some(burst);
         self
     }
 
@@ -411,6 +354,27 @@ impl ServiceBootstrap {
         self
     }
 
+    // ── Escape hatches for wrapper crates ──────────────────────────────────────
+
+    /// Inject an arbitrary tower layer into the middleware stack.
+    ///
+    /// Layers are applied in registration order, innermost first (i.e. the
+    /// first call to `with_layer` wraps closest to the user router).
+    ///
+    /// This is the primary extension point for wrapper crates. Example — adding
+    /// the `distributed-ratelimit` layer from `service-kit`:
+    ///
+    /// ```rust,ignore
+    /// bootstrap.with_layer(|router| router.layer(my_distributed_rl_layer))
+    /// ```
+    pub fn with_layer<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(Router) -> Router + Send + 'static,
+    {
+        self.extra_layers.push(Box::new(f));
+        self
+    }
+
     // ── OpenAPI ────────────────────────────────────────────────────────────────
 
     /// Mount an OpenAPI spec and Swagger UI.
@@ -429,15 +393,6 @@ impl ServiceBootstrap {
     ) -> Self {
         self.openapi_spec_path = spec_path.into();
         self.openapi_ui_path = ui_path.into();
-        self
-    }
-
-    // ── Auth ───────────────────────────────────────────────────────────────────
-
-    /// Enable JWT/OIDC + API-key authentication.
-    #[cfg(feature = "auth")]
-    pub fn with_auth(mut self, config: crate::auth::AuthConfig) -> Self {
-        self.auth_layer = Some(crate::auth::AuthLayer::new(config));
         self
     }
 }
@@ -502,7 +457,6 @@ mod tests {
                     limit: 10,
                     window_secs: 60,
                 },
-                ..Default::default()
             },
             ..Default::default()
         };
@@ -522,5 +476,120 @@ mod tests {
         assert_eq!(b.shutdown_hooks.len(), 2);
         assert_eq!(b.shutdown_hooks[0].name, "first");
         assert_eq!(b.shutdown_hooks[1].name, "second");
+    }
+
+    #[test]
+    fn with_layer_registers_in_order() {
+        let b = ServiceBootstrap::new("svc")
+            .with_layer(|r| r)
+            .with_layer(|r| r);
+        assert_eq!(b.extra_layers.len(), 2);
+    }
+
+    #[cfg(feature = "database")]
+    #[test]
+    fn with_database_sets_url() {
+        let b = ServiceBootstrap::new("svc").with_database("postgres://localhost/test");
+        assert_eq!(b.database_url.as_deref(), Some("postgres://localhost/test"));
+    }
+
+    #[cfg(feature = "telemetry")]
+    #[test]
+    fn with_telemetry_init_sets_flag_and_fn() {
+        let b = ServiceBootstrap::new("svc").with_telemetry_init(|_| Ok(()));
+        assert!(b.telemetry);
+        assert!(b.telemetry_init.is_some());
+    }
+
+    #[test]
+    fn run_errors_without_from_config() {
+        // run() requires bind_addr from from_config().
+        // We can't await here so just check bind_addr is None.
+        let b = ServiceBootstrap::new("svc").with_router(|_| Router::new());
+        assert!(b.bind_addr.is_none());
+    }
+
+    /// Spin up a real server on a random port, send one request, then drop the
+    /// server task. Covers the listen → serve → shutdown path in serve.rs.
+    #[tokio::test]
+    async fn serve_handles_real_http_request() {
+        use axum::routing::get;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener); // free the port; bootstrap will rebind
+
+        let server = tokio::spawn(async move {
+            ServiceBootstrap::new("test-svc")
+                .with_router(|_| Router::new().route("/ping", get(|| async { "pong" })))
+                .serve(addr.to_string())
+                .await
+                .ok();
+        });
+
+        // Give the server a moment to bind.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{addr}/ping")).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.text().await.unwrap(), "pong");
+
+        server.abort();
+    }
+
+    /// Health endpoints are mounted automatically.
+    #[tokio::test]
+    async fn serve_mounts_health_endpoints() {
+        use axum::routing::get;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let server = tokio::spawn(async move {
+            ServiceBootstrap::new("test-svc")
+                .with_router(|_| Router::new().route("/", get(|| async { "ok" })))
+                .serve(addr.to_string())
+                .await
+                .ok();
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{addr}/health/live"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let resp = reqwest::get(format!("http://{addr}/health/ready"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        server.abort();
+    }
+
+    /// 404 fallback returns Problem+JSON.
+    #[tokio::test]
+    async fn serve_returns_404_on_missing_route() {
+        use axum::routing::get;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let server = tokio::spawn(async move {
+            ServiceBootstrap::new("test-svc")
+                .with_router(|_| Router::new().route("/exists", get(|| async { "ok" })))
+                .serve(addr.to_string())
+                .await
+                .ok();
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{addr}/missing"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 404);
+
+        server.abort();
     }
 }

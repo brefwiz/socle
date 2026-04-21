@@ -31,18 +31,9 @@ mod error;
 mod handler_error;
 mod request_id;
 
-pub mod extract;
 pub mod etag;
+pub mod extract;
 pub mod pagination;
-
-#[cfg(feature = "http-client")]
-pub mod http_client;
-
-#[cfg(feature = "auth")]
-pub mod auth;
-
-#[cfg(feature = "prometheus-metrics")]
-pub mod metrics;
 
 #[cfg(feature = "testing")]
 pub mod testing;
@@ -77,31 +68,14 @@ pub use ports::health::ReadinessCheckFn;
 pub use api_bones::common::{ResourceId, Timestamp};
 pub use api_bones::ratelimit::RateLimitInfo;
 
-pub use api_bones::{ApiResponse, ApiResponseBuilder, ResponseMeta};
-pub use api_bones::{Link, Links};
-pub use api_bones::{Slug, SlugError};
-pub use api_bones::{BulkItemResult, BulkRequest, BulkResponse};
 pub use api_bones::AuditInfo;
-pub use api_bones::{Principal, PrincipalParseError, ResolvedPrincipal};
-pub use api_bones::{CacheControl, Vary};
-pub use api_bones::Deprecated;
-pub use api_bones::{ApiVersion, ApiVersionParseError, SemverTriple};
-pub use api_bones::{QueryBuilder, UrlBuilder};
-pub use api_bones::{BackoffStrategy, Idempotent, RetryPolicy};
-pub use api_bones::{RetryAfter, RetryAfterParseError};
-pub use api_bones::ContentType;
-pub use api_bones::HttpMethod;
-pub use api_bones::status::StatusCode as ApiStatusCode;
-pub use api_bones::{ErrorTypeMode, HttpError};
+pub use api_bones::{ApiResponse, ApiResponseBuilder, ResponseMeta};
+pub use api_bones::{BulkItemResult, BulkRequest, BulkResponse};
 pub use api_bones::{CorrelationId, CorrelationIdError};
 pub use api_bones::{IdempotencyKey, IdempotencyKeyError};
+pub use api_bones::{Link, Links};
 pub use api_bones::{RequestId, RequestIdParseError};
-
-#[cfg(feature = "auth")]
-pub use api_bones::{
-    ApiKeyCredentials, AuthScheme, AuthorizationHeader, BasicCredentials, BearerToken, OAuth2Token,
-    ParseAuthorizationError, ParsePermissionError, ParseScopeError, Permission, Scope,
-};
+pub use api_bones::{Slug, SlugError};
 
 /// Generate a `fn main()` for a `generate-openapi` binary in one line.
 ///
@@ -161,6 +135,14 @@ pub mod openapi {
         crate::adapters::openapi::to_3_0_pretty_json(api)
     }
 
+    /// Strip `content` from non-2xx response objects in a serialised OpenAPI value.
+    ///
+    /// Call this explicitly after [`to_3_0_pretty_json`] if desired. This is
+    /// opt-in — [`to_3_0_pretty_json`] does **not** call it automatically.
+    pub fn strip_non_success_response_content(val: &mut serde_json::Value) {
+        crate::adapters::openapi::strip_non_success_response_content(val)
+    }
+
     pub use crate::generate_openapi_binary;
 
     /// utoipa [`Modify`] plugin that registers a `bearerAuth` HTTP Bearer security scheme.
@@ -181,12 +163,6 @@ pub mod openapi {
 /// Re-exports of the underlying crates.
 pub mod reexports {
     pub use api_bones;
-    #[cfg(feature = "http-client")]
-    pub use api_bones_reqwest;
-    #[cfg(feature = "ratelimit-redis")]
-    pub use deadpool_redis;
-    #[cfg(feature = "prometheus-metrics")]
-    pub use prometheus;
 }
 
 #[cfg(test)]

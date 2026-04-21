@@ -35,22 +35,6 @@ pub enum RateLimitKind {
         /// Window in seconds.
         window_secs: u64,
     },
-    /// Postgres-backed limiter — requires `database_url` to be set.
-    Postgres {
-        /// Max requests per window.
-        limit: u32,
-        /// Window in seconds.
-        window_secs: u64,
-    },
-    /// Redis-backed limiter.
-    Redis {
-        /// `redis://...` URL.
-        url: String,
-        /// Max requests per window.
-        limit: u32,
-        /// Window in seconds.
-        window_secs: u64,
-    },
 }
 
 /// Rate-limiting configuration for [`BootstrapConfig`].
@@ -60,28 +44,6 @@ pub struct RateLimitConfig {
     /// Backend store + capacity settings.
     #[serde(flatten)]
     pub kind: RateLimitKind,
-
-    /// Rate-limiting algorithm string (e.g. `"fixed_window"`, `"sliding_window"`).
-    pub algorithm: Option<String>,
-
-    /// Key-extraction strategy (e.g. `"ip"`, `"user_id"`, `"api_key"`).
-    pub extractor: Option<String>,
-
-    /// Trusted proxy CIDRs for the `"trusted_proxy"` extractor.
-    pub trusted_proxy_cidrs: Vec<String>,
-
-    /// Behaviour when the backing store is unavailable (`"fail_open"` or `"fail_closed"`).
-    pub fail_mode: Option<String>,
-
-    /// Lease tier (`"per_key"`, `"pooled"`, `"direct"`).
-    pub lease_tier: Option<String>,
-
-    /// Uniform ±`pct` random jitter applied to the `Retry-After` header.
-    #[serde(default)]
-    pub retry_after_jitter_pct: f64,
-
-    /// Burst size override for token-bucket and GCRA algorithms.
-    pub burst: Option<u64>,
 }
 
 /// Structured CORS configuration.
@@ -205,14 +167,15 @@ impl BootstrapConfig {
             )
     }
 
-    /// Validate cross-field invariants.
+    /// Validate cross-field invariants. Returns the config back on success.
     pub fn validate(self) -> Result<Self> {
-        if matches!(self.rate_limit.kind, RateLimitKind::Postgres { .. })
-            && self.database_url.is_none()
-        {
-            return Err(Error::Config(
-                "rate_limit=postgres requires database_url to be set".into(),
-            ));
+        if let RateLimitKind::Memory { limit, window_secs } = self.rate_limit.kind {
+            if limit == 0 {
+                return Err(Error::Config("rate_limit.limit must be > 0".into()));
+            }
+            if window_secs == 0 {
+                return Err(Error::Config("rate_limit.window_secs must be > 0".into()));
+            }
         }
         Ok(self)
     }
@@ -225,6 +188,10 @@ fn map_err(e: figment::Error) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Env-var tests must run serially to avoid cross-test pollution.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn defaults_are_sensible() {
@@ -238,33 +205,149 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_postgres_without_database_url() {
-        let cfg = BootstrapConfig {
-            rate_limit: RateLimitConfig {
-                kind: RateLimitKind::Postgres {
-                    limit: 1,
-                    window_secs: 1,
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        assert!(cfg.validate().is_err());
+    fn from_env_returns_defaults_when_no_extra_env_set() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cfg = BootstrapConfig::from_env().unwrap();
+        assert_eq!(cfg.bind_addr, "0.0.0.0:8080");
     }
 
     #[test]
-    fn validate_accepts_postgres_with_database_url() {
+    fn from_env_reads_groundwork_prefixed_vars() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
+        unsafe { std::env::set_var("GROUNDWORK_BIND_ADDR", "127.0.0.1:9999") };
+        let cfg = BootstrapConfig::from_env().unwrap();
+        unsafe { std::env::remove_var("GROUNDWORK_BIND_ADDR") };
+        assert_eq!(cfg.bind_addr, "127.0.0.1:9999");
+    }
+
+    #[test]
+    fn from_env_reads_database_url() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
+        unsafe { std::env::set_var("DATABASE_URL", "postgres://test/db") };
+        let cfg = BootstrapConfig::from_env().unwrap();
+        unsafe { std::env::remove_var("DATABASE_URL") };
+        assert_eq!(cfg.database_url.as_deref(), Some("postgres://test/db"));
+    }
+
+    #[test]
+    fn from_env_reads_otel_endpoint() {
+        let _g = ENV_LOCK.lock().unwrap();
+        // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
+        unsafe { std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel:4317") };
+        let cfg = BootstrapConfig::from_env().unwrap();
+        unsafe { std::env::remove_var("OTEL_EXPORTER_OTLP_ENDPOINT") };
+        assert_eq!(cfg.otel_endpoint.as_deref(), Some("http://otel:4317"));
+    }
+
+    #[test]
+    fn load_reads_toml_file() {
+        let _g = ENV_LOCK.lock().unwrap();
+        use std::io::Write as _;
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, r#"bind_addr = "0.0.0.0:1234""#).unwrap();
+        let cfg = BootstrapConfig::load(f.path()).unwrap();
+        assert_eq!(cfg.bind_addr, "0.0.0.0:1234");
+    }
+
+    #[test]
+    fn load_env_overrides_toml() {
+        let _g = ENV_LOCK.lock().unwrap();
+        use std::io::Write as _;
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        writeln!(f, r#"bind_addr = "0.0.0.0:1234""#).unwrap();
+        // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
+        unsafe { std::env::set_var("GROUNDWORK_BIND_ADDR", "0.0.0.0:5678") };
+        let cfg = BootstrapConfig::load(f.path()).unwrap();
+        unsafe { std::env::remove_var("GROUNDWORK_BIND_ADDR") };
+        assert_eq!(cfg.bind_addr, "0.0.0.0:5678");
+    }
+
+    #[test]
+    fn validate_passes_for_defaults() {
+        assert!(BootstrapConfig::default().validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_zero_rate_limit() {
         let cfg = BootstrapConfig {
-            database_url: Some("postgres://x".into()),
             rate_limit: RateLimitConfig {
-                kind: RateLimitKind::Postgres {
-                    limit: 1,
-                    window_secs: 1,
+                kind: RateLimitKind::Memory {
+                    limit: 0,
+                    window_secs: 60,
                 },
-                ..Default::default()
             },
             ..Default::default()
         };
-        assert!(cfg.validate().is_ok());
+        assert!(matches!(cfg.validate(), Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn validate_rejects_zero_window_secs() {
+        let cfg = BootstrapConfig {
+            rate_limit: RateLimitConfig {
+                kind: RateLimitKind::Memory {
+                    limit: 10,
+                    window_secs: 0,
+                },
+            },
+            ..Default::default()
+        };
+        assert!(matches!(cfg.validate(), Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn cors_config_default_has_standard_methods() {
+        let cors = CorsConfig::default();
+        assert!(cors.allowed_methods.contains(&"GET".to_string()));
+        assert!(cors.allowed_methods.contains(&"POST".to_string()));
+        assert!(!cors.allow_credentials);
+        assert!(cors.max_age_secs.is_none());
+    }
+
+    #[test]
+    fn rate_limit_kind_memory_roundtrips_serde() {
+        let kind = RateLimitKind::Memory {
+            limit: 100,
+            window_secs: 60,
+        };
+        let json = serde_json::to_string(&kind).unwrap();
+        let back: RateLimitKind = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            back,
+            RateLimitKind::Memory {
+                limit: 100,
+                window_secs: 60
+            }
+        ));
+    }
+
+    #[test]
+    fn rate_limit_kind_none_roundtrips_serde() {
+        let kind = RateLimitKind::None;
+        let json = serde_json::to_string(&kind).unwrap();
+        let back: RateLimitKind = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, RateLimitKind::None));
+    }
+
+    #[test]
+    fn log_format_serde() {
+        assert_eq!(
+            serde_json::to_string(&LogFormat::Json).unwrap(),
+            r#""json""#
+        );
+        assert_eq!(
+            serde_json::to_string(&LogFormat::Pretty).unwrap(),
+            r#""pretty""#
+        );
+    }
+
+    #[test]
+    fn bootstrap_config_version_field() {
+        let mut cfg = BootstrapConfig::default();
+        assert!(cfg.version.is_none());
+        cfg.version = Some("1.2.3".into());
+        assert_eq!(cfg.version.as_deref(), Some("1.2.3"));
     }
 }

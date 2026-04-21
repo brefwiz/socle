@@ -32,11 +32,7 @@ mod test_client {
         }
 
         /// Perform a POST request against `path` with a JSON body.
-        pub async fn post<T: serde::Serialize>(
-            &self,
-            path: &str,
-            body: &T,
-        ) -> reqwest::Response {
+        pub async fn post<T: serde::Serialize>(&self, path: &str, body: &T) -> reqwest::Response {
             self.client
                 .post(format!("{}{path}", self.base_url))
                 .json(body)

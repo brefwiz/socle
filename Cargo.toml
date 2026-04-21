@@ -4,53 +4,32 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 repository = "https://github.com/brefwiz/groundwork"
 readme = "README.md"
+keywords = ["axum", "tower", "bootstrap", "http", "telemetry"]
+categories = ["web-programming::http-server", "asynchronous"]
+rust-version = "1.85"
 
 [features]
-default = ["telemetry", "database", "ratelimit", "ratelimit-memory", "openapi", "dotenv"]
+default = ["telemetry", "database", "ratelimit-memory", "openapi", "dotenv"]
 
 dotenv = ["dep:dotenvy"]
 
 telemetry = []
-telemetry-grpc = ["telemetry", "dep:opentelemetry-otlp", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tonic"]
-telemetry-http = ["telemetry", "dep:opentelemetry-otlp", "dep:opentelemetry", "dep:opentelemetry_sdk"]
 
 database = ["dep:sqlx"]
 
 ratelimit = []
-ratelimit-memory = ["ratelimit"]
-ratelimit-postgres = ["ratelimit", "database"]
-ratelimit-redis = ["ratelimit", "dep:deadpool-redis"]
+ratelimit-memory = ["ratelimit", "dep:governor"]
 
 openapi = ["dep:utoipa", "dep:utoipa-swagger-ui"]
-
-prometheus-metrics = [
-    "dep:opentelemetry-prometheus",
-    "dep:opentelemetry_sdk",
-    "dep:prometheus",
-    "dep:opentelemetry",
-]
-
-http-client = [
-    "dep:reqwest",
-    "dep:reqwest-middleware",
-    "dep:opentelemetry",
-    "dep:async-trait",
-    "dep:http",
-    "dep:api-bones-reqwest",
-]
-
-auth = ["dep:jsonwebtoken", "dep:reqwest", "api-bones/auth"]
 
 validation = ["dep:validator"]
 
 cursor = ["api-bones/base64"]
 
-test-support = []
 testing = ["dep:reqwest"]
-testing-pg = ["testing", "database", "dep:testcontainers", "dep:testcontainers-modules"]
 
 [dependencies]
 axum = { version = "0.8", features = ["macros"] }
@@ -67,19 +46,11 @@ serde_json = "1"
 figment = { version = "0.10", features = ["env", "toml"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-api-bones = { version = "2.0", registry = "brefwiz", features = ["axum", "uuid"] }
-api-bones-reqwest = { version = "2.0", registry = "brefwiz", optional = true }
-
-opentelemetry = { version = "0.31", optional = true }
-opentelemetry_sdk = { version = "0.31", default-features = false, features = ["metrics"], optional = true }
-opentelemetry-otlp = { version = "0.31", optional = true }
-opentelemetry-prometheus = { version = "0.31", optional = true }
-prometheus = { version = "0.14", default-features = false, optional = true }
-tonic = { version = "0.13", optional = true }
+api-bones = { version = "4.0", features = ["axum", "uuid"] }
 
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate"], optional = true }
 
-deadpool-redis = { version = "0.23", optional = true }
+governor = { version = "0.10", default-features = false, features = ["std", "dashmap"], optional = true }
 
 utoipa = { version = "5", optional = true }
 utoipa-swagger-ui = { version = "9", default-features = false, features = ["axum"], optional = true }
@@ -87,17 +58,13 @@ utoipa-swagger-ui = { version = "9", default-features = false, features = ["axum
 dotenvy = { version = "0.15", optional = true }
 
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
-jsonwebtoken = { version = "10", features = ["aws_lc_rs"], optional = true }
-reqwest-middleware = { version = "0.5", optional = true }
-async-trait = { version = "0.1", optional = true }
-http = { version = "1", optional = true }
 
 validator = { version = "0.20", features = ["derive"], optional = true }
-
-testcontainers = { version = "0.27", optional = true }
-testcontainers-modules = { version = "0.15", features = ["postgres"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 serde_json = "1"
+http-body-util = "0.1"
+bytes = "1"
+tempfile = "3"
