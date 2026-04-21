@@ -8,7 +8,7 @@ jobs:
   release:
     uses: brefwiz/shared-ci-workflows/.github/workflows/release-rust.yml@main
     with:
-      crates: "groundwork"
+      crates: "socle"
     secrets:
       cargo-registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     permissions:
