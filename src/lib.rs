@@ -45,7 +45,8 @@ pub use config::{BootstrapConfig, CorsConfig, LogFormat, RateLimitConfig, RateLi
 pub use error::{Error, Result};
 pub use etag::{ETag, IfMatch, IfNoneMatch, check_if_match, etag_from_updated_at};
 pub use handler_error::{
-    ApiError, CreatedResult, ErrorCode, HandlerError, HandlerResult, ProblemJson, ValidationError,
+    ApiError, CreatedResult, ErrorCode, HandlerError, HandlerListResponse, HandlerResponse,
+    ProblemJson, ValidationError,
 };
 pub use pagination::{
     CursorPaginatedResponse, CursorPagination, CursorPaginationParams, KeysetPaginatedResponse,

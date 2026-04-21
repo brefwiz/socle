@@ -1,6 +1,6 @@
 [package]
 name = "socle"
-version = "0.1.2"
+version = "1.0.0"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
