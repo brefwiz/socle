@@ -1,0 +1,15 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    uses: brefwiz/shared-ci-workflows/.github/workflows/release-rust.yml@main
+    with:
+      crates: "groundwork"
+    secrets:
+      cargo-registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    permissions:
+      contents: write

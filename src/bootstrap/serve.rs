@@ -55,6 +55,7 @@ impl ServiceBootstrap {
         let shutdown_timeout = self.shutdown_timeout;
         let extra_layers = self.extra_layers;
         let rate_limit_provider = self.rate_limit_provider;
+        let auth_provider = self.auth_provider;
         let cors = self.cors;
         let router_builder = self.router_builder;
         let version = self.version;
@@ -212,6 +213,12 @@ impl ServiceBootstrap {
                     ratelimit_extractor,
                 ));
             }
+        }
+
+        // Auth — applied after rate-limit (unauthenticated requests still
+        // counted) and before extra_layers.
+        if let Some(provider) = auth_provider {
+            app = provider.apply(app);
         }
 
         // Extra layers registered via with_layer() — applied innermost first.

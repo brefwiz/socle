@@ -6,3 +6,5 @@ pub mod health;
 pub mod telemetry;
 
 pub mod rate_limit;
+
+pub mod auth;

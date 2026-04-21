@@ -5,6 +5,8 @@
 ## [0.1.0] — 2026-04-20
 
 ### Added
+- `AuthProvider` trait (`ports::auth::AuthProvider`) — extension point for pluggable authentication middleware (JWT, OIDC, API key, mTLS). Groundwork ships no built-in auth backend; wrapper crates supply their own.
+- `ServiceBootstrap::with_auth_provider(P: AuthProvider)` — registers an auth provider. The layer is applied after rate-limit (so unauthenticated requests are still rate-counted) and before `with_layer` extensions.
 - Opinionated axum service bootstrap builder (`ServiceBootstrap`) with telemetry, database, rate limiting, and graceful shutdown
 - In-process GCRA rate limiter via `governor` as a Tower layer (`ratelimit-memory` feature)
 - `BootstrapCtx` extension map for escape hatches in wrapper crates

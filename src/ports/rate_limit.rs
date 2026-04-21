@@ -13,7 +13,7 @@
 //! struct DistributedRateLimit { /* distributed-ratelimit config */ }
 //!
 //! impl RateLimitProvider for DistributedRateLimit {
-//!     fn apply(self: Box<Self>, router: Router) -> Router {
+//!     fn apply(&self, router: Router) -> Router {
 //!         router.layer(/* your tower layer */)
 //!     }
 //! }
@@ -24,11 +24,12 @@
 /// Extension point for rate-limit layer injection.
 ///
 /// Implementors receive the fully assembled user router and must return it
-/// with the rate-limit tower layer applied. Consuming `Box<Self>` avoids
-/// the `Sized` restriction while still allowing arbitrary state.
-pub trait RateLimitProvider: Send + 'static {
+/// with the rate-limit tower layer applied. Tower layers are idiomatically
+/// `Clone`, so `&self` is sufficient — the implementor clones any internal
+/// state into the layer.
+pub trait RateLimitProvider: Send + Sync + 'static {
     /// Wrap `router` with a rate-limit layer and return the result.
-    fn apply(self: Box<Self>, router: axum::Router) -> axum::Router;
+    fn apply(&self, router: axum::Router) -> axum::Router;
 }
 
 #[cfg(feature = "ratelimit-memory")]
@@ -39,7 +40,7 @@ mod memory_impl {
     };
 
     impl RateLimitProvider for RateLimitBackend {
-        fn apply(self: Box<Self>, router: axum::Router) -> axum::Router {
+        fn apply(&self, router: axum::Router) -> axum::Router {
             router.layer(RateLimitLayer::new_memory(
                 self.limit,
                 self.window_secs,
@@ -57,7 +58,7 @@ mod tests {
     struct PassthroughProvider;
 
     impl RateLimitProvider for PassthroughProvider {
-        fn apply(self: Box<Self>, router: Router) -> Router {
+        fn apply(&self, router: Router) -> Router {
             router
         }
     }

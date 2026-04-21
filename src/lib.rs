@@ -61,6 +61,7 @@ pub use adapters::security::rate_limit::{RateLimitBackend, RateLimitExtractor};
 #[cfg(feature = "validation")]
 pub use extract::Valid;
 
+pub use ports::auth::AuthProvider;
 pub use ports::health::ReadinessCheckFn;
 pub use ports::rate_limit::RateLimitProvider;
 #[cfg(feature = "telemetry")]

@@ -10,6 +10,7 @@ use crate::bootstrap::ctx::BootstrapCtx;
 use crate::config::RateLimitKind;
 use crate::config::{BootstrapConfig, CorsConfig};
 use crate::error::{Error, Result};
+use crate::ports::auth::AuthProvider;
 use crate::ports::health::{HealthProbe, ReadinessCheckFn, probe_to_check_fn};
 use crate::ports::rate_limit::RateLimitProvider;
 #[cfg(feature = "telemetry")]
@@ -85,6 +86,11 @@ pub struct ServiceBootstrap {
     /// (Postgres, Redis, gossip) without touching `serve()`.
     pub(crate) rate_limit_provider: Option<Box<dyn RateLimitProvider>>,
 
+    /// Pluggable auth provider. Groundwork ships no built-in auth backend;
+    /// wrapper crates supply JWT/JWKS, API-key, OIDC, etc. Applied after the
+    /// rate-limit layer and before any `with_layer` extensions.
+    pub(crate) auth_provider: Option<Box<dyn AuthProvider>>,
+
     pub(crate) cors: Option<CorsLayer>,
     pub(crate) router_builder: Option<RouterBuilder>,
     pub(crate) version: String,
@@ -126,6 +132,7 @@ impl ServiceBootstrap {
             #[cfg(feature = "ratelimit")]
             ratelimit_extractor: RateLimitExtractor::Ip,
             rate_limit_provider: None,
+            auth_provider: None,
             cors: None,
             router_builder: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -411,6 +418,40 @@ impl ServiceBootstrap {
     /// [`with_layer`]: ServiceBootstrap::with_layer
     pub fn with_rate_limit_provider<P: RateLimitProvider>(mut self, provider: P) -> Self {
         self.rate_limit_provider = Some(Box::new(provider));
+        self
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    /// Plug in an [`AuthProvider`] implementation.
+    ///
+    /// Groundwork ships no built-in auth backend — the provider is supplied
+    /// by the caller (typically a wrapper crate such as `service-kit`) and
+    /// owns its configuration, JWKS cache, API-key validator, etc.
+    ///
+    /// The provider receives the assembled router (already wrapped by the
+    /// rate-limit layer when one is configured) and returns it with the
+    /// auth tower layer applied. Auth is applied **after** rate-limit so
+    /// unauthenticated requests are still rate-counted, and **before** any
+    /// extra layers registered via [`with_layer`].
+    ///
+    /// ```rust,no_run
+    /// use axum::Router;
+    /// use groundwork::{ServiceBootstrap, ports::auth::AuthProvider};
+    ///
+    /// struct MyJwtAuth;
+    /// impl AuthProvider for MyJwtAuth {
+    ///     fn apply(self: Box<Self>, router: Router) -> Router {
+    ///         router // .layer(my_auth_layer)
+    ///     }
+    /// }
+    ///
+    /// ServiceBootstrap::new("svc").with_auth_provider(MyJwtAuth);
+    /// ```
+    ///
+    /// [`with_layer`]: ServiceBootstrap::with_layer
+    pub fn with_auth_provider<P: AuthProvider>(mut self, provider: P) -> Self {
+        self.auth_provider = Some(Box::new(provider));
         self
     }
 
