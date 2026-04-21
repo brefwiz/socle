@@ -6,9 +6,14 @@ use axum::Router;
 use tower_http::cors::CorsLayer;
 
 use crate::bootstrap::ctx::BootstrapCtx;
-use crate::config::{BootstrapConfig, CorsConfig, RateLimitKind};
+#[cfg(feature = "ratelimit")]
+use crate::config::RateLimitKind;
+use crate::config::{BootstrapConfig, CorsConfig};
 use crate::error::{Error, Result};
 use crate::ports::health::{HealthProbe, ReadinessCheckFn, probe_to_check_fn};
+use crate::ports::rate_limit::RateLimitProvider;
+#[cfg(feature = "telemetry")]
+use crate::ports::telemetry::TelemetryProvider;
 
 #[cfg(feature = "ratelimit")]
 use crate::adapters::security::rate_limit::{RateLimitBackend, RateLimitExtractor};
@@ -16,6 +21,7 @@ use crate::adapters::security::rate_limit::{RateLimitBackend, RateLimitExtractor
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 pub(crate) type RouterBuilder = Box<dyn FnOnce(&BootstrapCtx) -> Router + Send>;
+#[cfg(feature = "telemetry")]
 pub(crate) type TelemetryInitFn = Box<dyn FnOnce(&str) -> crate::error::Result<()> + Send>;
 
 /// Async drain callback registered via [`ServiceBootstrap::with_shutdown_hook`].
@@ -52,7 +58,12 @@ pub struct ServiceBootstrap {
     pub(crate) telemetry: bool,
     /// Override for telemetry initialisation. When set, called instead of
     /// `init_basic_tracing()`. Receives the service name.
+    #[cfg(feature = "telemetry")]
     pub(crate) telemetry_init: Option<TelemetryInitFn>,
+    /// Structured provider — takes priority over `telemetry_init` when both are
+    /// set. Registers its own shutdown hook automatically.
+    #[cfg(feature = "telemetry")]
+    pub(crate) telemetry_provider: Option<Box<dyn TelemetryProvider>>,
 
     #[cfg(feature = "database")]
     pub(crate) database_url: Option<String>,
@@ -69,6 +80,10 @@ pub struct ServiceBootstrap {
     pub(crate) rate_limit: Option<RateLimitBackend>,
     #[cfg(feature = "ratelimit")]
     pub(crate) ratelimit_extractor: RateLimitExtractor,
+    /// Pluggable rate-limit provider. Takes priority over `rate_limit` when
+    /// both are set. Wrapper crates use this to inject distributed backends
+    /// (Postgres, Redis, gossip) without touching `serve()`.
+    pub(crate) rate_limit_provider: Option<Box<dyn RateLimitProvider>>,
 
     pub(crate) cors: Option<CorsLayer>,
     pub(crate) router_builder: Option<RouterBuilder>,
@@ -95,7 +110,10 @@ impl ServiceBootstrap {
             service_name: service_name.into(),
             #[cfg(feature = "telemetry")]
             telemetry: false,
+            #[cfg(feature = "telemetry")]
             telemetry_init: None,
+            #[cfg(feature = "telemetry")]
+            telemetry_provider: None,
             #[cfg(feature = "database")]
             database_url: None,
             #[cfg(feature = "database")]
@@ -107,6 +125,7 @@ impl ServiceBootstrap {
             rate_limit: None,
             #[cfg(feature = "ratelimit")]
             ratelimit_extractor: RateLimitExtractor::Ip,
+            rate_limit_provider: None,
             cors: None,
             router_builder: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -259,6 +278,11 @@ impl ServiceBootstrap {
     /// success or an [`Error`] that aborts startup.
     ///
     /// Implies [`with_telemetry`] — no need to call both.
+    ///
+    /// Prefer [`with_telemetry_provider`] for new code; it also handles
+    /// shutdown (span/metric flush) automatically.
+    ///
+    /// [`with_telemetry_provider`]: ServiceBootstrap::with_telemetry_provider
     #[cfg(feature = "telemetry")]
     pub fn with_telemetry_init<F>(mut self, f: F) -> Self
     where
@@ -266,6 +290,37 @@ impl ServiceBootstrap {
     {
         self.telemetry = true;
         self.telemetry_init = Some(Box::new(f));
+        self
+    }
+
+    /// Plug in a [`TelemetryProvider`] implementation.
+    ///
+    /// The provider's [`TelemetryProvider::init`] is called at startup and its
+    /// [`TelemetryProvider::on_shutdown`] is registered as a drain hook that
+    /// runs after the HTTP server stops (with a 30-second timeout).
+    ///
+    /// Takes priority over [`with_telemetry_init`] and
+    /// [`with_telemetry`] when all are called. Implies [`with_telemetry`].
+    ///
+    /// Use this to wire in `otel-bootstrap` or any other OTel SDK from a
+    /// wrapper crate:
+    ///
+    /// ```rust,no_run
+    /// use groundwork::{ServiceBootstrap, ports::telemetry::TelemetryProvider, Result};
+    ///
+    /// struct MyOtelProvider;
+    /// impl TelemetryProvider for MyOtelProvider {
+    ///     fn init(&self, _: &str) -> Result<()> { Ok(()) }
+    /// }
+    ///
+    /// ServiceBootstrap::new("svc").with_telemetry_provider(MyOtelProvider);
+    /// ```
+    ///
+    /// [`with_telemetry_init`]: ServiceBootstrap::with_telemetry_init
+    #[cfg(feature = "telemetry")]
+    pub fn with_telemetry_provider<P: TelemetryProvider>(mut self, provider: P) -> Self {
+        self.telemetry = true;
+        self.telemetry_provider = Some(Box::new(provider));
         self
     }
 
@@ -326,6 +381,36 @@ impl ServiceBootstrap {
     #[cfg(feature = "ratelimit")]
     pub fn with_rate_limit_extractor(mut self, extractor: RateLimitExtractor) -> Self {
         self.ratelimit_extractor = extractor;
+        self
+    }
+
+    /// Plug in a [`RateLimitProvider`] implementation.
+    ///
+    /// Takes priority over [`with_rate_limit`] when both are called. The
+    /// provider receives the assembled router and returns it with the
+    /// rate-limit tower layer applied.
+    ///
+    /// Use this to inject distributed backends (Postgres, Redis, gossip) from
+    /// a wrapper crate without calling [`with_layer`] directly:
+    ///
+    /// ```rust,no_run
+    /// use axum::Router;
+    /// use groundwork::{ServiceBootstrap, ports::rate_limit::RateLimitProvider};
+    ///
+    /// struct MyDistributedRl;
+    /// impl RateLimitProvider for MyDistributedRl {
+    ///     fn apply(self: Box<Self>, router: Router) -> Router {
+    ///         router // .layer(my_distributed_rl_layer)
+    ///     }
+    /// }
+    ///
+    /// ServiceBootstrap::new("svc").with_rate_limit_provider(MyDistributedRl);
+    /// ```
+    ///
+    /// [`with_rate_limit`]: ServiceBootstrap::with_rate_limit
+    /// [`with_layer`]: ServiceBootstrap::with_layer
+    pub fn with_rate_limit_provider<P: RateLimitProvider>(mut self, provider: P) -> Self {
+        self.rate_limit_provider = Some(Box::new(provider));
         self
     }
 

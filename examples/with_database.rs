@@ -14,7 +14,6 @@ async fn health(State(pool): State<PgPool>) -> &'static str {
 #[tokio::main]
 async fn main() -> Result<()> {
     ServiceBootstrap::new("my-service")
-        .with_dotenv()
         .with_telemetry()
         .with_database(std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"))
         .with_router(|ctx: &BootstrapCtx| {

@@ -2,6 +2,7 @@
 
 /// Initialise a `tracing_subscriber` using the `RUST_LOG` env var.
 /// Safe to call multiple times; subsequent calls are no-ops.
+#[cfg(feature = "telemetry")]
 pub(crate) fn init_basic_tracing() {
     use tracing_subscriber::{EnvFilter, fmt};
     let _ = fmt()

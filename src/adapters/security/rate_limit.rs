@@ -5,16 +5,26 @@
 //! distributed rate limiting (Postgres, Redis) should implement their own
 //! tower layer and register it via the escape-hatch builder method.
 
+#[cfg(feature = "ratelimit-memory")]
 use std::future::Future;
+#[cfg(feature = "ratelimit")]
 use std::net::SocketAddr;
+#[cfg(feature = "ratelimit-memory")]
 use std::pin::Pin;
+#[cfg(feature = "ratelimit-memory")]
 use std::sync::Arc;
+#[cfg(feature = "ratelimit-memory")]
 use std::task::{Context, Poll};
+#[cfg(feature = "ratelimit-memory")]
 use std::time::Duration;
 
+#[cfg(feature = "ratelimit")]
 use axum::extract::ConnectInfo;
+#[cfg(any(feature = "ratelimit", feature = "ratelimit-memory"))]
 use axum::http::{Request, StatusCode};
+#[cfg(any(feature = "ratelimit", feature = "ratelimit-memory"))]
 use axum::response::{IntoResponse, Response};
+#[cfg(feature = "ratelimit-memory")]
 use tower::{Layer, Service};
 
 // ── Backend config ────────────────────────────────────────────────────────────
@@ -24,6 +34,7 @@ use tower::{Layer, Service};
 /// Consumers needing distributed rate limiting (Postgres, Redis) should
 /// implement their own tower layer and register it via the builder's
 /// escape-hatch method.
+#[cfg(feature = "ratelimit")]
 #[derive(Debug, Clone)]
 pub struct RateLimitBackend {
     /// Max requests per window.
@@ -35,6 +46,7 @@ pub struct RateLimitBackend {
 // ── Key extraction ────────────────────────────────────────────────────────────
 
 /// Determines what gets rate-limited.
+#[cfg(feature = "ratelimit")]
 #[derive(Debug, Clone, Default)]
 pub enum RateLimitExtractor {
     /// Remote IP address (reads `ConnectInfo` extension; falls back to
@@ -45,6 +57,7 @@ pub enum RateLimitExtractor {
     Header(String),
 }
 
+#[cfg(feature = "ratelimit")]
 impl RateLimitExtractor {
     fn extract<B>(&self, req: &Request<B>) -> String {
         match self {
@@ -69,6 +82,7 @@ impl RateLimitExtractor {
     }
 }
 
+#[cfg(feature = "ratelimit")]
 fn extract_header<B>(req: &Request<B>, name: &str) -> String {
     req.headers()
         .get(name)
@@ -143,6 +157,7 @@ pub struct RateLimitService<S> {
     limit: u32,
 }
 
+#[cfg(feature = "ratelimit-memory")]
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 #[cfg(feature = "ratelimit-memory")]
@@ -182,6 +197,7 @@ where
     }
 }
 
+#[cfg(feature = "ratelimit-memory")]
 fn too_many_requests(limit: u32, retry_after_secs: u64) -> Response {
     use std::time::{SystemTime, UNIX_EPOCH};
     let reset = SystemTime::now()
@@ -203,7 +219,7 @@ fn too_many_requests(limit: u32, retry_after_secs: u64) -> Response {
     res
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ratelimit-memory"))]
 mod tests {
     use super::*;
     use axum::body::Body;

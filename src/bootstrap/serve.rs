@@ -48,23 +48,82 @@ impl ServiceBootstrap {
         listener: tokio::net::TcpListener,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<()> {
-        // 1. Telemetry first.
+        // Destructure early so we can mutate shutdown_hooks without partial-move issues.
+        let service_name = self.service_name;
+        #[cfg_attr(not(feature = "telemetry"), allow(unused_mut))]
+        let mut shutdown_hooks = self.shutdown_hooks;
+        let shutdown_timeout = self.shutdown_timeout;
+        let extra_layers = self.extra_layers;
+        let rate_limit_provider = self.rate_limit_provider;
+        let cors = self.cors;
+        let router_builder = self.router_builder;
+        let version = self.version;
+        let health_path = self.health_path;
+        let body_limit_bytes = self.body_limit_bytes;
+        let readiness_checks = self.readiness_checks;
+
+        #[cfg(feature = "database")]
+        let database_url = self.database_url;
+        #[cfg(feature = "database")]
+        let db_pool = self.db_pool;
+        #[cfg(feature = "database")]
+        let migrator = self.migrator;
+
+        #[cfg(feature = "ratelimit")]
+        let rate_limit = self.rate_limit;
+        #[cfg(feature = "ratelimit")]
+        let ratelimit_extractor = self.ratelimit_extractor;
+
+        #[cfg(feature = "openapi")]
+        let openapi = self.openapi;
+        #[cfg(feature = "openapi")]
+        let openapi_spec_path = self.openapi_spec_path;
+        #[cfg(feature = "openapi")]
+        let openapi_ui_path = self.openapi_ui_path;
+
         #[cfg(feature = "telemetry")]
-        if self.telemetry {
-            match self.telemetry_init {
-                Some(init_fn) => {
-                    init_fn(&self.service_name).map_err(|e| Error::Telemetry(e.to_string()))?
+        let telemetry_enabled = self.telemetry;
+        #[cfg(feature = "telemetry")]
+        let telemetry_provider = self.telemetry_provider;
+        #[cfg(feature = "telemetry")]
+        let telemetry_init = self.telemetry_init;
+
+        // 1. Telemetry first — priority: provider > init_fn > builtin.
+        #[cfg(feature = "telemetry")]
+        if telemetry_enabled {
+            if let Some(provider) = telemetry_provider {
+                provider
+                    .init(&service_name)
+                    .map_err(|e| Error::Telemetry(e.to_string()))?;
+                // Register the provider's flush as the last drain hook so it
+                // runs after all user-registered hooks have completed.
+                let provider = std::sync::Arc::new(provider);
+                let hook: crate::bootstrap::builder::ShutdownHookFn =
+                    std::sync::Arc::new(move || {
+                        let p = provider.clone();
+                        Box::pin(async move { p.on_shutdown().await })
+                    });
+                shutdown_hooks.push(ShutdownHook {
+                    name: "telemetry-flush".into(),
+                    hook,
+                    timeout: std::time::Duration::from_secs(30),
+                });
+            } else {
+                match telemetry_init {
+                    Some(init_fn) => {
+                        init_fn(&service_name).map_err(|e| Error::Telemetry(e.to_string()))?
+                    }
+                    None => crate::adapters::observability::telemetry::init_basic_tracing(),
                 }
-                None => crate::adapters::observability::telemetry::init_basic_tracing(),
             }
         }
 
         // 2. Database pool — prefer pre-built pool over URL construction.
         #[cfg(feature = "database")]
-        let db: Option<sqlx::PgPool> = if let Some(pool) = self.db_pool {
-            if let Some(ref migrator) = self.migrator {
+        let db: Option<sqlx::PgPool> = if let Some(pool) = db_pool {
+            if let Some(ref migrator) = migrator {
                 tracing::warn!(
-                    service = %self.service_name,
+                    service = %service_name,
                     "groundwork: running migrations in-process"
                 );
                 migrator
@@ -74,14 +133,14 @@ impl ServiceBootstrap {
                 tracing::info!("groundwork: migrations applied successfully");
             }
             Some(pool)
-        } else if let Some(ref url) = self.database_url {
+        } else if let Some(ref url) = database_url {
             let pool = sqlx::PgPool::connect(url)
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
 
-            if let Some(ref migrator) = self.migrator {
+            if let Some(ref migrator) = migrator {
                 tracing::warn!(
-                    service = %self.service_name,
+                    service = %service_name,
                     "groundwork: running migrations in-process"
                 );
                 migrator
@@ -92,7 +151,7 @@ impl ServiceBootstrap {
             }
 
             Some(pool)
-        } else if self.migrator.is_some() {
+        } else if migrator.is_some() {
             return Err(Error::Config(
                 "with_migrations(...) requires with_database(...) to be called first".into(),
             ));
@@ -102,35 +161,36 @@ impl ServiceBootstrap {
 
         // 3. Build the user router via ctx.
         let ctx = BootstrapCtx {
-            service_name: self.service_name.clone(),
+            service_name: service_name.clone(),
             #[cfg(feature = "database")]
             db: db.clone(),
             extensions: std::collections::HashMap::new(),
         };
 
-        let router_builder = self
-            .router_builder
-            .ok_or_else(|| Error::Config("with_router(...) was never called".into()))?;
-        let user_router = router_builder(&ctx);
+        let user_router = router_builder
+            .ok_or_else(|| Error::Config("with_router(...) was never called".into()))?(
+            &ctx
+        );
 
         // 4. Mount health endpoints.
         let health_router = crate::adapters::health::build_health_router(
-            &self.health_path,
-            &self.service_name,
-            &self.version,
-            self.readiness_checks.clone(),
+            &health_path,
+            &service_name,
+            &version,
+            readiness_checks.clone(),
         );
+        #[cfg_attr(not(feature = "openapi"), allow(unused_mut))]
         let mut user_router = user_router.merge(health_router);
 
         // OpenAPI spec + Swagger UI.
         #[cfg(feature = "openapi")]
-        if let Some(mut api) = self.openapi.clone() {
-            api = crate::adapters::openapi::merge_health_paths(api, &self.health_path);
+        if let Some(mut api) = openapi.clone() {
+            api = crate::adapters::openapi::merge_health_paths(api, &health_path);
             user_router = crate::adapters::openapi::mount_openapi(
                 user_router,
                 api,
-                &self.openapi_spec_path,
-                &self.openapi_ui_path,
+                &openapi_spec_path,
+                &openapi_ui_path,
             );
         }
 
@@ -139,19 +199,23 @@ impl ServiceBootstrap {
         // 5. Apply layers.
         let mut app = user_router;
 
-        // Rate limit layer (innermost — runs closest to the user router).
-        #[cfg(feature = "ratelimit-memory")]
-        if let Some(cfg) = self.rate_limit {
-            use crate::adapters::security::rate_limit::RateLimitLayer;
-            app = app.layer(RateLimitLayer::new_memory(
-                cfg.limit,
-                cfg.window_secs,
-                self.ratelimit_extractor,
-            ));
+        // Rate limit — priority: provider > built-in memory backend.
+        if let Some(provider) = rate_limit_provider {
+            app = provider.apply(app);
+        } else {
+            #[cfg(feature = "ratelimit-memory")]
+            if let Some(cfg) = rate_limit {
+                use crate::adapters::security::rate_limit::RateLimitLayer;
+                app = app.layer(RateLimitLayer::new_memory(
+                    cfg.limit,
+                    cfg.window_secs,
+                    ratelimit_extractor,
+                ));
+            }
         }
 
         // Extra layers registered via with_layer() — applied innermost first.
-        for layer_fn in self.extra_layers {
+        for layer_fn in extra_layers {
             app = layer_fn(app);
         }
 
@@ -181,13 +245,13 @@ impl ServiceBootstrap {
 
         // CORS is opt-in. Omitting with_cors_config() means no CORS headers are
         // sent, which is safe for APIs not accessed from browsers.
-        if let Some(cors) = self.cors {
+        if let Some(cors) = cors {
             app = app.layer(cors);
         }
 
         app = app
             .layer(CompressionLayer::new())
-            .layer(RequestBodyLimitLayer::new(self.body_limit_bytes))
+            .layer(RequestBodyLimitLayer::new(body_limit_bytes))
             .layer(CatchPanicLayer::custom(crate::handler_error::panic_handler))
             .layer(trace_layer)
             .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
@@ -198,15 +262,13 @@ impl ServiceBootstrap {
             ));
 
         // 6. Serve with caller-supplied shutdown signal.
-        let shutdown_timeout = self.shutdown_timeout;
-        let shutdown_hooks = self.shutdown_hooks;
         let make_service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
         let server = axum::serve(listener, make_service).with_graceful_shutdown(shutdown);
 
         server.await.map_err(|e| Error::Serve(e.to_string()))?;
 
         run_shutdown_hooks(shutdown_hooks, shutdown_timeout).await;
-        tracing::info!("groundwork: shutdown complete");
+        tracing::info!(service = %service_name, "groundwork: shutdown complete");
         Ok(())
     }
 }

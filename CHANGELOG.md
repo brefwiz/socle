@@ -1,14 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.1.0] — 2026-04-20
 
 ### Added
 - Opinionated axum service bootstrap builder (`ServiceBootstrap`) with telemetry, database, rate limiting, and graceful shutdown
 - In-process GCRA rate limiter via `governor` as a Tower layer (`ratelimit-memory` feature)
 - `BootstrapCtx` extension map for escape hatches in wrapper crates
+- `TelemetryProvider` trait (`Send + Sync`) with `init(&self, service_name)` and `on_shutdown()` — plug in any OTel SDK from a wrapper crate without forking `serve()`; `on_shutdown` is automatically registered as a 30s drain hook after the HTTP server stops
+- `RateLimitProvider` trait with `apply(Box<Self>, router) -> Router` — inject any tower-compatible rate-limit layer (Postgres, Redis, gossip) without using the raw `with_layer` escape hatch
+- `BasicTelemetryProvider` (built-in impl: `tracing_subscriber`, no-op shutdown)
+- `RateLimitBackend` implements `RateLimitProvider` under `ratelimit-memory`
+- `ServiceBootstrap::with_telemetry_provider(P: TelemetryProvider)` — takes priority over `with_telemetry_init`
+- `ServiceBootstrap::with_rate_limit_provider(P: RateLimitProvider)` — takes priority over `with_rate_limit`
 - CI pipeline with format, clippy, audit, deny, coverage, cargo-package, and auto-tag jobs
 - Auto-tag composite action: tags main on green CI and triggers `release.yml`
-- `release.yml`: validate → lint → audit → test → cargo-publish → Gitea release
+- `release.yml`: validate → lint → audit → test → cargo-publish → GitHub release
 
 ### Changed
 - Replaced hand-rolled fixed-window `HashMap` rate limiter with `governor` GCRA algorithm

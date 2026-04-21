@@ -68,3 +68,24 @@ serde_json = "1"
 http-body-util = "0.1"
 bytes = "1"
 tempfile = "3"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
+
+[[example]]
+name = "minimal"
+path = "examples/minimal.rs"
+required-features = ["telemetry"]
+
+[[example]]
+name = "with_database"
+path = "examples/with_database.rs"
+required-features = ["telemetry", "database"]
+
+[[example]]
+name = "with_ratelimit"
+path = "examples/with_ratelimit.rs"
+required-features = ["telemetry", "ratelimit-memory"]
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+required-features = ["testing"]

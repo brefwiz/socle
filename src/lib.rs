@@ -62,6 +62,9 @@ pub use adapters::security::rate_limit::{RateLimitBackend, RateLimitExtractor};
 pub use extract::Valid;
 
 pub use ports::health::ReadinessCheckFn;
+pub use ports::rate_limit::RateLimitProvider;
+#[cfg(feature = "telemetry")]
+pub use ports::telemetry::{BasicTelemetryProvider, TelemetryProvider};
 
 // ── api-bones re-exports ──────────────────────────────────────────────────────
 
@@ -178,6 +181,7 @@ mod tests {
         assert!(Error::Serve("x".into()).to_string().contains("x"));
     }
 
+    #[cfg(feature = "telemetry")]
     #[test]
     fn init_basic_tracing_is_idempotent() {
         crate::adapters::observability::telemetry::init_basic_tracing();
