@@ -1,11 +1,11 @@
-//! # groundwork
+//! # socle
 //!
 //! Opinionated axum service bootstrap: telemetry, database, rate limiting, and
 //! shutdown in one builder. Public open-source facade extracted from an internal
 //! service kit.
 //!
 //! ```rust,no_run
-//! use groundwork::{ServiceBootstrap, BootstrapCtx, Result};
+//! use socle::{ServiceBootstrap, BootstrapCtx, Result};
 //! use axum::{Router, routing::get};
 //!
 //! # #[tokio::main] async fn main() -> Result<()> {
@@ -93,7 +93,7 @@ pub use api_bones::{Slug, SlugError};
 /// #[openapi()]
 /// struct ApiDoc;
 ///
-/// groundwork::generate_openapi_binary!(ApiDoc);
+/// socle::generate_openapi_binary!(ApiDoc);
 /// # }
 /// ```
 #[cfg(feature = "openapi")]
@@ -121,7 +121,7 @@ macro_rules! generate_openapi_binary {
 /// OpenAPI helpers for callers generating specs outside of [`ServiceBootstrap::serve`].
 #[cfg(feature = "openapi")]
 pub mod openapi {
-    /// Merge groundwork's built-in health path definitions into `api`.
+    /// Merge socle's built-in health path definitions into `api`.
     pub fn merge_health_paths(
         api: utoipa::openapi::OpenApi,
         health_path: &str,

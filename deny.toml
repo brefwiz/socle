@@ -6,7 +6,7 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
     # rsa Marvin timing side-channel (RUSTSEC-2023-0071) surfaces via
-    # sqlx-mysql which is a transitive dep of sqlx. groundwork only enables
+    # sqlx-mysql which is a transitive dep of sqlx. socle only enables
     # the postgres feature so the mysql (and rsa) code paths are never compiled
     # or linked. No actionable fix until sqlx drops the mysql dep or patches rsa.
     "RUSTSEC-2023-0071",

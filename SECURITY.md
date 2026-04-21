@@ -8,7 +8,7 @@ Only the latest published version on crates.io receives security fixes.
 
 Please **do not** open a public issue for security vulnerabilities.
 
-Open a [private security advisory](https://github.com/brefwiz/groundwork/security/advisories/new) on GitHub, or email the maintainers at **security@brefwiz.com**.
+Open a [private security advisory](https://github.com/brefwiz/socle/security/advisories/new) on GitHub, or email the maintainers at **security@brefwiz.com**.
 
 Include:
 

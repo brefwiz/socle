@@ -1,8 +1,8 @@
-# groundwork
+# socle
 
-[![CI](https://github.com/brefwiz/groundwork/actions/workflows/ci.yml/badge.svg)](https://github.com/brefwiz/groundwork/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/groundwork.svg)](https://crates.io/crates/groundwork)
-[![docs.rs](https://docs.rs/groundwork/badge.svg)](https://docs.rs/groundwork)
+[![CI](https://github.com/brefwiz/socle/actions/workflows/ci.yml/badge.svg)](https://github.com/brefwiz/socle/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/socle.svg)](https://crates.io/crates/socle)
+[![docs.rs](https://docs.rs/socle/badge.svg)](https://docs.rs/socle)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
@@ -10,7 +10,7 @@ Every new service in a platform starts the same way. Someone wires up `tracing-s
 
 This is the problem that gets worse in the AI era. An agent scaffolding a new service will invent its own `main.rs` from scratch — different shutdown ordering, different observability setup, different error handling — unless there is a single bootstrap to reach for.
 
-**groundwork is that bootstrap.** One builder, one call to `serve()`, and your service gets: structured tracing, Postgres connection + migrations, in-process GCRA rate limiting, request-ID propagation, health endpoints, graceful shutdown with drain hooks, CORS, body-size limiting, panic recovery, and OpenAPI + Swagger UI — all wired in the correct order, consistently, every time.
+**socle is that bootstrap.** One builder, one call to `serve()`, and your service gets: structured tracing, Postgres connection + migrations, in-process GCRA rate limiting, request-ID propagation, health endpoints, graceful shutdown with drain hooks, CORS, body-size limiting, panic recovery, and OpenAPI + Swagger UI — all wired in the correct order, consistently, every time.
 
 ## Who this is for
 
@@ -23,11 +23,11 @@ This is the problem that gets worse in the AI era. An agent scaffolding a new se
 
 ```toml
 [dependencies]
-groundwork = "0.1"
+socle = "0.1"
 ```
 
 ```rust
-use groundwork::{ServiceBootstrap, BootstrapCtx, Result};
+use socle::{ServiceBootstrap, BootstrapCtx, Result};
 use axum::{Router, routing::get};
 
 #[tokio::main]
@@ -52,12 +52,12 @@ See [`examples/`](examples/) for runnable examples.
 Load all settings from environment variables or a TOML file, then pass the config to the builder. Useful for 12-factor services and Kubernetes deployments.
 
 ```rust
-use groundwork::{ServiceBootstrap, BootstrapConfig, Result};
+use socle::{ServiceBootstrap, BootstrapConfig, Result};
 use axum::{Router, routing::get};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Reads GROUNDWORK_* env vars, DATABASE_URL, OTEL_EXPORTER_OTLP_ENDPOINT
+    // Reads SOCLE_* env vars, DATABASE_URL, OTEL_EXPORTER_OTLP_ENDPOINT
     let cfg = BootstrapConfig::from_env()?;
     ServiceBootstrap::from_config("payments-service", cfg)?
         .with_router(|_| Router::new().route("/ping", get(|| async { "pong" })))
@@ -100,7 +100,7 @@ GET /health/ready
 Register dependency checks with `with_readiness_check`:
 
 ```rust
-use groundwork::ServiceBootstrap;
+use socle::ServiceBootstrap;
 use api_bones::health::HealthCheck;
 
 ServiceBootstrap::new("billing-service")
@@ -115,7 +115,7 @@ ServiceBootstrap::new("billing-service")
 Add GCRA rate limiting in one line. The limiter is backed by `governor` and applied as a tower layer — no middleware to wire manually.
 
 ```rust
-use groundwork::{ServiceBootstrap, RateLimitBackend, RateLimitExtractor};
+use socle::{ServiceBootstrap, RateLimitBackend, RateLimitExtractor};
 
 ServiceBootstrap::new("api-gateway")
     .with_rate_limit(RateLimitBackend { limit: 100, window_secs: 60 })
@@ -146,7 +146,7 @@ Register async callbacks that run after the HTTP server stops accepting connecti
 
 ```rust
 use std::time::Duration;
-use groundwork::ServiceBootstrap;
+use socle::ServiceBootstrap;
 
 ServiceBootstrap::new("worker-service")
     .with_shutdown_hook("flush-metrics", Duration::from_secs(5), || async {
@@ -162,7 +162,7 @@ ServiceBootstrap::new("worker-service")
 No CORS headers are sent unless you configure them explicitly. There is no "allow all origins" default.
 
 ```rust
-use groundwork::{ServiceBootstrap, CorsConfig};
+use socle::{ServiceBootstrap, CorsConfig};
 
 ServiceBootstrap::new("public-api")
     .with_cors_config(CorsConfig {
@@ -178,7 +178,7 @@ ServiceBootstrap::new("public-api")
 Mount a utoipa-generated spec and Swagger UI with a single call. The health endpoints are merged into the spec automatically.
 
 ```rust
-use groundwork::ServiceBootstrap;
+use socle::ServiceBootstrap;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -193,10 +193,10 @@ ServiceBootstrap::new("orders-service")
 
 ### Escape hatches for wrapper crates
 
-Inject arbitrary tower layers and access the fully-constructed context in the router builder. This is how `service-kit` and other internal wrapper crates extend groundwork without forking `serve()`.
+Inject arbitrary tower layers and access the fully-constructed context in the router builder. This is how `service-kit` and other internal wrapper crates extend socle without forking `serve()`.
 
 ```rust
-use groundwork::{ServiceBootstrap, BootstrapCtx};
+use socle::{ServiceBootstrap, BootstrapCtx};
 use axum::Router;
 
 ServiceBootstrap::new("platform-service")
@@ -276,7 +276,7 @@ ServiceBootstrap::new("platform-service")
 
 | Method | Description |
 |--------|-------------|
-| `BootstrapConfig::from_env()` | Load from `GROUNDWORK_*` env vars |
+| `BootstrapConfig::from_env()` | Load from `SOCLE_*` env vars |
 | `BootstrapConfig::load(path)` | Load from TOML file with env-var overrides |
 | `BootstrapConfig::validate()` | Validate cross-field invariants |
 
@@ -284,12 +284,12 @@ Environment variables honored automatically:
 
 | Env var | Field |
 |---------|-------|
-| `GROUNDWORK_BIND_ADDR` | `bind_addr` |
-| `GROUNDWORK_HEALTH_PATH` | `health_path` |
-| `GROUNDWORK_LOG_LEVEL` | `log_level` |
-| `GROUNDWORK_LOG_FORMAT` | `log_format` (`pretty` or `json`) |
-| `GROUNDWORK_SHUTDOWN_TIMEOUT_SECS` | `shutdown_timeout_secs` |
-| `GROUNDWORK_BODY_LIMIT_BYTES` | `body_limit_bytes` |
+| `SOCLE_BIND_ADDR` | `bind_addr` |
+| `SOCLE_HEALTH_PATH` | `health_path` |
+| `SOCLE_LOG_LEVEL` | `log_level` |
+| `SOCLE_LOG_FORMAT` | `log_format` (`pretty` or `json`) |
+| `SOCLE_SHUTDOWN_TIMEOUT_SECS` | `shutdown_timeout_secs` |
+| `SOCLE_BODY_LIMIT_BYTES` | `body_limit_bytes` |
 | `DATABASE_URL` | `database_url` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `otel_endpoint` |
 
@@ -327,6 +327,20 @@ Layers are applied in this order, outermost first (i.e. request processing goes 
 | `validation` | — | `Valid<T>` extractor via `validator` |
 | `cursor` | — | HMAC-signed opaque pagination cursors |
 | `testing` | — | `reqwest`-based test helpers |
+
+## Prior art
+
+**[`loco`](https://loco.rs)** is the closest crate in spirit — a batteries-included, Rails-inspired framework with an ORM, mailers, background jobs, CLI generation, and built-in auth. If you want a full-stack analogue to Rails, use loco. socle is a library, not a framework: it imposes no project structure, no ORM, no CLI, and no conventions beyond the bootstrap call itself. You bring axum routes; socle brings consistent plumbing.
+
+**[`shuttle`](https://www.shuttle.rs)** solves a different problem: managed cloud deployment via an annotated `#[shuttle_runtime::main]`. It owns your infrastructure. socle owns nothing outside `serve()` and works with any deployment target.
+
+**Roll-your-own boilerplate** is the real competitor — most teams copy a `main.rs` from the previous service and diverge over time. Four services in, telemetry is initialised four different ways, health endpoints are missing on two of them, and graceful shutdown drains in the wrong order on one. socle is what that shared boilerplate would look like if it were tested, versioned, and depended on rather than copied.
+
+Three things socle does that the alternatives don't:
+
+- **Correct layer ordering, always.** Rate-limiting wraps auth wraps the user router wraps telemetry — in that order, enforced by the builder, not documented somewhere and hoped for.
+- **Per-hook shutdown timeouts with drain ordering.** Hooks run in reverse registration order; each has its own deadline. Getting this right in every service individually is the kind of thing that fails silently in production.
+- **Port traits for wrapper crates.** `AuthProvider` and `RateLimitProvider` let internal platforms extend socle without forking `serve()`. Add your JWT layer, your distributed rate limiter, your org-context middleware — socle stays upgradeable.
 
 ## MSRV
 

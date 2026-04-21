@@ -1,4 +1,4 @@
-//! Axum extractors provided by groundwork.
+//! Axum extractors provided by socle.
 
 #[cfg(feature = "validation")]
 pub use validation::Valid;

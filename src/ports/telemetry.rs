@@ -13,13 +13,13 @@ use std::pin::Pin;
 
 /// Extension point for telemetry initialisation.
 ///
-/// Wrapper crates supply a concrete implementation; groundwork calls `init` at
+/// Wrapper crates supply a concrete implementation; socle calls `init` at
 /// the start of `serve()` and registers `on_shutdown` as a drain hook after the
 /// HTTP server stops.
 ///
 /// ```rust,no_run
-/// use groundwork::ports::telemetry::TelemetryProvider;
-/// use groundwork::Result;
+/// use socle::ports::telemetry::TelemetryProvider;
+/// use socle::Result;
 ///
 /// struct MyOtelProvider;
 ///

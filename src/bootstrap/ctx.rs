@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// In addition to the typed fields, an arbitrary type map is available via
 /// [`BootstrapCtx::insert`] / [`BootstrapCtx::get`]. Service-kit and other
 /// Brefwiz layers use this to inject internal resources (e.g. a
-/// `ConnectionSource`) without requiring groundwork to know about them.
+/// `ConnectionSource`) without requiring socle to know about them.
 #[derive(Clone)]
 pub struct BootstrapCtx {
     pub(crate) service_name: Arc<str>,
@@ -37,7 +37,7 @@ impl BootstrapCtx {
 
     /// Store an arbitrary value in the extension map.
     ///
-    /// Used by wrapper crates (e.g. service-kit) to inject types that groundwork
+    /// Used by wrapper crates (e.g. service-kit) to inject types that socle
     /// doesn't know about. Overwrites any previously stored value of the same type.
     pub fn insert<T: Send + Sync + 'static>(&mut self, val: T) {
         self.extensions.insert(TypeId::of::<T>(), Arc::new(val));

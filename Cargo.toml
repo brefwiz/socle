@@ -1,11 +1,11 @@
 [package]
-name = "groundwork"
+name = "socle"
 version = "0.1.0"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
 license = "MIT"
-repository = "https://github.com/brefwiz/groundwork"
+repository = "https://github.com/brefwiz/socle"
 readme = "README.md"
 keywords = ["axum", "tower", "bootstrap", "http", "telemetry"]
 categories = ["web-programming::http-server", "asynchronous"]

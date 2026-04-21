@@ -40,7 +40,7 @@ pub(crate) struct ShutdownHook {
 /// Builder for a microservice runtime.
 ///
 /// ```rust,no_run
-/// use groundwork::{ServiceBootstrap, BootstrapCtx, Result};
+/// use socle::{ServiceBootstrap, BootstrapCtx, Result};
 /// use axum::{Router, routing::get};
 ///
 /// # #[tokio::main] async fn main() -> Result<()> {
@@ -313,7 +313,7 @@ impl ServiceBootstrap {
     /// wrapper crate:
     ///
     /// ```rust,no_run
-    /// use groundwork::{ServiceBootstrap, ports::telemetry::TelemetryProvider, Result};
+    /// use socle::{ServiceBootstrap, ports::telemetry::TelemetryProvider, Result};
     ///
     /// struct MyOtelProvider;
     /// impl TelemetryProvider for MyOtelProvider {
@@ -402,7 +402,7 @@ impl ServiceBootstrap {
     ///
     /// ```rust,no_run
     /// use axum::Router;
-    /// use groundwork::{ServiceBootstrap, ports::rate_limit::RateLimitProvider};
+    /// use socle::{ServiceBootstrap, ports::rate_limit::RateLimitProvider};
     ///
     /// struct MyDistributedRl;
     /// impl RateLimitProvider for MyDistributedRl {
@@ -437,7 +437,7 @@ impl ServiceBootstrap {
     ///
     /// ```rust,no_run
     /// use axum::Router;
-    /// use groundwork::{ServiceBootstrap, ports::auth::AuthProvider};
+    /// use socle::{ServiceBootstrap, ports::auth::AuthProvider};
     ///
     /// struct MyJwtAuth;
     /// impl AuthProvider for MyJwtAuth {

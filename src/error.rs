@@ -1,8 +1,8 @@
-//! Error type for `groundwork`.
+//! Error type for `socle`.
 
 use thiserror::Error;
 
-/// Result alias used throughout `groundwork`.
+/// Result alias used throughout `socle`.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that can occur while bootstrapping or running a service.

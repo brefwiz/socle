@@ -3,7 +3,7 @@
 //! Limits each IP to 100 requests per 60-second window.
 
 use axum::{Router, routing::get};
-use groundwork::{BootstrapCtx, RateLimitBackend, RateLimitExtractor, Result, ServiceBootstrap};
+use socle::{BootstrapCtx, RateLimitBackend, RateLimitExtractor, Result, ServiceBootstrap};
 
 #[tokio::main]
 async fn main() -> Result<()> {

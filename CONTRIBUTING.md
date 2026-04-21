@@ -1,4 +1,4 @@
-# Contributing to groundwork
+# Contributing to socle
 
 Thank you for your interest in contributing!
 
@@ -12,8 +12,8 @@ Thank you for your interest in contributing!
 ## Development setup
 
 ```bash
-git clone https://github.com/brefwiz/groundwork
-cd groundwork
+git clone https://github.com/brefwiz/socle
+cd socle
 cp .env.example .env   # if present, otherwise set DATABASE_URL manually
 cargo build
 ```
@@ -25,7 +25,7 @@ cargo build
 cargo test
 
 # All tests including integration (requires DATABASE_URL)
-DATABASE_URL=postgres://localhost/groundwork_test cargo test
+DATABASE_URL=postgres://localhost/socle_test cargo test
 
 # Coverage
 cargo llvm-cov --all-features

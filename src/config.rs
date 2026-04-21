@@ -154,7 +154,7 @@ impl BootstrapConfig {
         if let Some(p) = path {
             fig = fig.merge(Toml::file(p));
         }
-        fig.merge(Env::prefixed("GROUNDWORK_").split("__"))
+        fig.merge(Env::prefixed("SOCLE_").split("__"))
             .merge(
                 Env::raw()
                     .only(&["DATABASE_URL"])
@@ -212,12 +212,12 @@ mod tests {
     }
 
     #[test]
-    fn from_env_reads_groundwork_prefixed_vars() {
+    fn from_env_reads_socle_prefixed_vars() {
         let _g = ENV_LOCK.lock().unwrap();
         // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
-        unsafe { std::env::set_var("GROUNDWORK_BIND_ADDR", "127.0.0.1:9999") };
+        unsafe { std::env::set_var("SOCLE_BIND_ADDR", "127.0.0.1:9999") };
         let cfg = BootstrapConfig::from_env().unwrap();
-        unsafe { std::env::remove_var("GROUNDWORK_BIND_ADDR") };
+        unsafe { std::env::remove_var("SOCLE_BIND_ADDR") };
         assert_eq!(cfg.bind_addr, "127.0.0.1:9999");
     }
 
@@ -258,9 +258,9 @@ mod tests {
         let mut f = tempfile::NamedTempFile::new().unwrap();
         writeln!(f, r#"bind_addr = "0.0.0.0:1234""#).unwrap();
         // SAFETY: ENV_LOCK serialises all env-var mutations in this module.
-        unsafe { std::env::set_var("GROUNDWORK_BIND_ADDR", "0.0.0.0:5678") };
+        unsafe { std::env::set_var("SOCLE_BIND_ADDR", "0.0.0.0:5678") };
         let cfg = BootstrapConfig::load(f.path()).unwrap();
-        unsafe { std::env::remove_var("GROUNDWORK_BIND_ADDR") };
+        unsafe { std::env::remove_var("SOCLE_BIND_ADDR") };
         assert_eq!(cfg.bind_addr, "0.0.0.0:5678");
     }
 

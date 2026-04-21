@@ -1,7 +1,7 @@
 //! Minimal service: telemetry + one route.
 
 use axum::{Router, routing::get};
-use groundwork::{BootstrapCtx, Result, ServiceBootstrap};
+use socle::{BootstrapCtx, Result, ServiceBootstrap};
 
 #[tokio::main]
 async fn main() -> Result<()> {

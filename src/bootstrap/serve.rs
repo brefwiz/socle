@@ -21,7 +21,7 @@ impl ServiceBootstrap {
         let listener = tokio::net::TcpListener::bind(addr)
             .await
             .map_err(|e| Error::Bind(e.to_string()))?;
-        tracing::info!(%addr, service = %self.service_name, "groundwork: listening");
+        tracing::info!(%addr, service = %self.service_name, "socle: listening");
         self.serve_with_shutdown(listener, shutdown_signal()).await
     }
 
@@ -31,7 +31,7 @@ impl ServiceBootstrap {
     ///
     /// ```rust,no_run
     /// use axum::{Router, routing::get};
-    /// use groundwork::{BootstrapCtx, Result, ServiceBootstrap};
+    /// use socle::{BootstrapCtx, Result, ServiceBootstrap};
     /// use tokio::net::TcpListener;
     ///
     /// # #[tokio::main] async fn main() -> Result<()> {
@@ -125,13 +125,13 @@ impl ServiceBootstrap {
             if let Some(ref migrator) = migrator {
                 tracing::warn!(
                     service = %service_name,
-                    "groundwork: running migrations in-process"
+                    "socle: running migrations in-process"
                 );
                 migrator
                     .run(&pool)
                     .await
                     .map_err(|e| Error::Database(format!("migrate: {e}")))?;
-                tracing::info!("groundwork: migrations applied successfully");
+                tracing::info!("socle: migrations applied successfully");
             }
             Some(pool)
         } else if let Some(ref url) = database_url {
@@ -142,13 +142,13 @@ impl ServiceBootstrap {
             if let Some(ref migrator) = migrator {
                 tracing::warn!(
                     service = %service_name,
-                    "groundwork: running migrations in-process"
+                    "socle: running migrations in-process"
                 );
                 migrator
                     .run(&pool)
                     .await
                     .map_err(|e| Error::Database(format!("migrate: {e}")))?;
-                tracing::info!("groundwork: migrations applied successfully");
+                tracing::info!("socle: migrations applied successfully");
             }
 
             Some(pool)
@@ -275,20 +275,20 @@ impl ServiceBootstrap {
         server.await.map_err(|e| Error::Serve(e.to_string()))?;
 
         run_shutdown_hooks(shutdown_hooks, shutdown_timeout).await;
-        tracing::info!(service = %service_name, "groundwork: shutdown complete");
+        tracing::info!(service = %service_name, "socle: shutdown complete");
         Ok(())
     }
 }
 
 async fn run_shutdown_hooks(hooks: Vec<ShutdownHook>, _default_timeout: std::time::Duration) {
     for hook in hooks.into_iter().rev() {
-        tracing::info!(hook = %hook.name, "groundwork: running shutdown hook");
+        tracing::info!(hook = %hook.name, "socle: running shutdown hook");
         match tokio::time::timeout(hook.timeout, (hook.hook)()).await {
-            Ok(()) => tracing::info!(hook = %hook.name, "groundwork: shutdown hook completed"),
+            Ok(()) => tracing::info!(hook = %hook.name, "socle: shutdown hook completed"),
             Err(_) => tracing::error!(
                 hook = %hook.name,
                 timeout_secs = hook.timeout.as_secs(),
-                "groundwork: shutdown hook timed out"
+                "socle: shutdown hook timed out"
             ),
         }
     }

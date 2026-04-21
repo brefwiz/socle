@@ -3,7 +3,7 @@
 //! Requires `DATABASE_URL` in the environment (or a `.env` file).
 
 use axum::{Router, extract::State, routing::get};
-use groundwork::{BootstrapCtx, Result, ServiceBootstrap};
+use socle::{BootstrapCtx, Result, ServiceBootstrap};
 use sqlx::PgPool;
 
 async fn health(State(pool): State<PgPool>) -> &'static str {

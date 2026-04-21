@@ -2,7 +2,7 @@
 //! random port, hit it with `reqwest`, assert responses.
 
 use axum::{Router, routing::get};
-use groundwork::{BootstrapCtx, ServiceBootstrap, testing::TestClient};
+use socle::{BootstrapCtx, ServiceBootstrap, testing::TestClient};
 use tokio::sync::oneshot;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ async fn unknown_route_returns_404_problem_json() {
 #[cfg(feature = "ratelimit-memory")]
 #[tokio::test]
 async fn rate_limit_blocks_after_limit_exceeded() {
-    use groundwork::RateLimitBackend;
+    use socle::RateLimitBackend;
 
     let (client, _stop) = spawn_service(|s| {
         s.with_rate_limit(RateLimitBackend {

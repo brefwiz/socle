@@ -1,4 +1,4 @@
-//! Test helpers shared across services built on groundwork.
+//! Test helpers shared across services built on socle.
 //!
 //! Enabled by the `testing` feature.
 

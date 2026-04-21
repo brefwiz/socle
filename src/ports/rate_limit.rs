@@ -8,7 +8,7 @@
 //!
 //! ```rust,no_run
 //! use axum::Router;
-//! use groundwork::ports::rate_limit::RateLimitProvider;
+//! use socle::ports::rate_limit::RateLimitProvider;
 //!
 //! struct DistributedRateLimit { /* distributed-ratelimit config */ }
 //!

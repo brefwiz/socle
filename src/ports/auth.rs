@@ -1,6 +1,6 @@
 //! Auth port — extension point for pluggable authentication middleware.
 //!
-//! Unlike rate-limit, groundwork ships **no** built-in auth backend. The
+//! Unlike rate-limit, socle ships **no** built-in auth backend. The
 //! authentication landscape is too varied (JWT/JWKS, OIDC, OAuth2, API keys,
 //! mTLS, custom headers) and a default would either be useless or dangerous.
 //!
@@ -10,7 +10,7 @@
 //!
 //! ```rust,no_run
 //! use axum::Router;
-//! use groundwork::ports::auth::AuthProvider;
+//! use socle::ports::auth::AuthProvider;
 //!
 //! struct JwtAuthProvider { /* JWKS cache, issuer, audience, api-key store */ }
 //!
