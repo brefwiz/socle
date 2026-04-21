@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-04-21
+
+### Changed
+- Bumped `api-bones` dependency to `4.0.1`.
+
 ## [0.1.0] — 2026-04-20
 
 ### Added
