@@ -18,8 +18,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     uses: brefwiz/shared-ci-workflows/.github/workflows/auto-tag.yml@main
     needs: ci
+    permissions:
+      contents: write
     secrets:
-      release-token: ${{ secrets.RELEASE_TOKEN }}
+      release-token: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')

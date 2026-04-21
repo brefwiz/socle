@@ -26,8 +26,6 @@ This is the problem that gets worse in the AI era. An agent scaffolding a new se
 groundwork = "0.1"
 ```
 
-## Quick start
-
 ```rust
 use groundwork::{ServiceBootstrap, BootstrapCtx, Result};
 use axum::{Router, routing::get};
@@ -45,7 +43,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-See the [`examples/`](examples/) directory for runnable examples.
+See [`examples/`](examples/) for runnable examples.
 
 ## Use cases
 
@@ -333,10 +331,6 @@ Layers are applied in this order, outermost first (i.e. request processing goes 
 ## MSRV
 
 Rust **1.85** (edition 2024). Tested on stable.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
