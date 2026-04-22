@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-04-21
+
+### Added
+
+- `HandlerResponse<T>` — envelope-aware return type for single-resource handlers: `Result<(StatusCode, Json<ApiResponse<T>>), HandlerError>`.
+- `HandlerListResponse<T>` — envelope-aware return type for collection handlers: `Result<Json<ApiResponse<PaginatedResponse<T>>>, HandlerError>`.
+
+### Removed
+
+- `HandlerResult<T>` — bare `Json<T>` wrapper removed. Migrate to `HandlerResponse<T>` or `HandlerListResponse<T>`.
+
 ## [0.1.2] — 2026-04-21
 
 ### Fixed

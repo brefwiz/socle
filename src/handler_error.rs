@@ -63,8 +63,18 @@ impl IntoResponse for HandlerError {
     }
 }
 
-/// Convenience return type for handlers that return a JSON body on success.
-pub type HandlerResult<T> = Result<axum::Json<T>, HandlerError>;
+/// Return type for handlers that return a single resource wrapped in the platform envelope.
+pub type HandlerResponse<T> = Result<
+    (
+        axum::http::StatusCode,
+        axum::Json<api_bones::ApiResponse<T>>,
+    ),
+    HandlerError,
+>;
+
+/// Return type for handlers that return a paginated collection wrapped in the platform envelope.
+pub type HandlerListResponse<T> =
+    Result<axum::Json<api_bones::ApiResponse<api_bones::PaginatedResponse<T>>>, HandlerError>;
 
 /// Convenience return type for handlers that return `201 Created` with a JSON body.
 pub type CreatedResult<T> = Result<(axum::http::StatusCode, axum::Json<T>), HandlerError>;
