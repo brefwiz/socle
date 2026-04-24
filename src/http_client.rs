@@ -1,22 +1,12 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use opentelemetry::{Context, global, propagation::Injector};
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest_middleware::{
     ClientBuilder as MiddlewareClientBuilder, ClientWithMiddleware, Middleware, Next,
     Result as MiddlewareResult,
 };
 
 use crate::request_id::CURRENT_REQUEST_ID;
-
-struct HashMapInjector<'a>(&'a mut HashMap<String, String>);
-
-impl Injector for HashMapInjector<'_> {
-    fn set(&mut self, key: &str, value: String) {
-        self.0.insert(key.to_owned(), value);
-    }
-}
 
 struct TraceContextMiddleware;
 
@@ -29,19 +19,21 @@ impl Middleware for TraceContextMiddleware {
         next: Next<'_>,
     ) -> MiddlewareResult<reqwest::Response> {
         let cx = Context::current();
-        let mut carrier: HashMap<String, String> = HashMap::new();
         global::get_text_map_propagator(|propagator| {
-            propagator.inject_context(&cx, &mut HashMapInjector(&mut carrier));
+            let mut injector = HeaderMapInjector(req.headers_mut());
+            propagator.inject_context(&cx, &mut injector);
         });
-        for (key, value) in carrier {
-            if let (Ok(name), Ok(val)) = (
-                HeaderName::from_bytes(key.as_bytes()),
-                HeaderValue::from_str(&value),
-            ) {
-                req.headers_mut().insert(name, val);
-            }
-        }
         next.run(req, extensions).await
+    }
+}
+
+struct HeaderMapInjector<'a>(&'a mut HeaderMap);
+
+impl Injector for HeaderMapInjector<'_> {
+    fn set(&mut self, key: &str, value: String) {
+        if let (Ok(name), Ok(val)) = (HeaderName::try_from(key), HeaderValue::try_from(value)) {
+            self.0.insert(name, val);
+        }
     }
 }
 
@@ -55,13 +47,16 @@ impl Middleware for RequestIdMiddleware {
         extensions: &mut http::Extensions,
         next: Next<'_>,
     ) -> MiddlewareResult<reqwest::Response> {
-        if let Ok(id) = CURRENT_REQUEST_ID.try_with(|id| id.clone()) {
-            if !id.is_empty() {
-                if let Ok(val) = HeaderValue::from_str(&id) {
-                    req.headers_mut().insert("x-request-id", val);
+        CURRENT_REQUEST_ID
+            .try_with(|id| {
+                if let (Ok(name), Ok(val)) = (
+                    HeaderName::try_from("x-request-id"),
+                    HeaderValue::from_str(id.as_str()),
+                ) {
+                    req.headers_mut().entry(name).or_insert(val);
                 }
-            }
-        }
+            })
+            .ok();
         next.run(req, extensions).await
     }
 }
@@ -74,8 +69,15 @@ pub fn builder() -> ClientBuilder {
 }
 
 /// Thin wrapper around [`reqwest::ClientBuilder`].
+#[must_use = "ClientBuilder does nothing until you call .build()"]
 pub struct ClientBuilder {
     inner: reqwest::ClientBuilder,
+}
+
+impl Default for ClientBuilder {
+    fn default() -> Self {
+        builder()
+    }
 }
 
 impl ClientBuilder {
@@ -89,8 +91,8 @@ impl ClientBuilder {
         self
     }
 
-    pub fn user_agent(mut self, value: impl AsRef<str>) -> Self {
-        self.inner = self.inner.user_agent(value.as_ref());
+    pub fn user_agent(mut self, value: impl Into<String>) -> Self {
+        self.inner = self.inner.user_agent(value.into());
         self
     }
 
