@@ -166,8 +166,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use tokio::net::TcpListener;
 
+    type CapturedHeaders = Arc<Mutex<Vec<(String, String)>>>;
+
     async fn capture_headers(
-        axum::extract::State(captured): axum::extract::State<Arc<Mutex<Vec<(String, String)>>>>,
+        axum::extract::State(captured): axum::extract::State<CapturedHeaders>,
         req: AxumRequest,
     ) -> &'static str {
         let mut guard = captured.lock().unwrap();
