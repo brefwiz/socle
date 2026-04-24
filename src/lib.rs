@@ -38,6 +38,9 @@ pub mod pagination;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+#[cfg(feature = "http-client")]
+pub mod http_client;
+
 // ── Public surface ────────────────────────────────────────────────────────────
 
 pub use bootstrap::{BootstrapCtx, ServiceBootstrap, ShutdownHookFn};
