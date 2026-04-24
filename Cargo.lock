@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "socle"
-version = "2.3.0"
+version = "2.3.1"
 dependencies = [
  "api-bones",
  "async-trait",
@@ -3903,8 +3903,15 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "utoipa-swagger-ui-vendored",
  "zip",
 ]
+
+[[package]]
+name = "utoipa-swagger-ui-vendored"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2eebbbfe4093922c2b6734d7c679ebfebd704a0d7e56dfcb0d05818ce28977d"
 
 [[package]]
 name = "uuid"

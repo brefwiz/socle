@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-04-24
+
+### Fixed
+
+- `openapi` feature: add `vendored` to `utoipa-swagger-ui` dependency so Swagger UI assets are bundled at compile time rather than downloaded from GitHub at build time — prevents build failures in air-gapped CI environments.
+
 ## [2.3.0] — 2026-04-24
 
 ### Fixed
