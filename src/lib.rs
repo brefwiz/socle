@@ -41,6 +41,9 @@ pub mod testing;
 #[cfg(feature = "http-client")]
 pub mod http_client;
 
+#[cfg(feature = "metrics")]
+pub mod metrics;
+
 // ── Public surface ────────────────────────────────────────────────────────────
 
 pub use bootstrap::{BootstrapCtx, ServiceBootstrap, ShutdownHookFn};
