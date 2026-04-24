@@ -406,7 +406,7 @@ impl ServiceBootstrap {
     ///
     /// struct MyDistributedRl;
     /// impl RateLimitProvider for MyDistributedRl {
-    ///     fn apply(self: Box<Self>, router: Router) -> Router {
+    ///     fn apply(&self, router: Router) -> Router {
     ///         router // .layer(my_distributed_rl_layer)
     ///     }
     /// }
@@ -441,7 +441,7 @@ impl ServiceBootstrap {
     ///
     /// struct MyJwtAuth;
     /// impl AuthProvider for MyJwtAuth {
-    ///     fn apply(self: Box<Self>, router: Router) -> Router {
+    ///     fn apply(&self, router: Router) -> Router {
     ///         router // .layer(my_auth_layer)
     ///     }
     /// }

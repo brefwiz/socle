@@ -18,6 +18,8 @@ use std::pin::Pin;
 /// HTTP server stops.
 ///
 /// ```rust,no_run
+/// use std::future::Future;
+/// use std::pin::Pin;
 /// use socle::ports::telemetry::TelemetryProvider;
 /// use socle::Result;
 ///

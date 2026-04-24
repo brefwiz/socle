@@ -16,7 +16,7 @@
 //!
 //! impl AuthProvider for JwtAuthProvider {
 //!     fn apply(&self, router: Router) -> Router {
-//!         router.layer(/* your tower layer */)
+//!         router // .layer(your_tower_layer_here)
 //!     }
 //! }
 //! ```
