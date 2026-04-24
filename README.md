@@ -23,7 +23,7 @@ This is the problem that gets worse in the AI era. An agent scaffolding a new se
 
 ```toml
 [dependencies]
-socle = "1.2"
+socle = "1.3"
 ```
 
 ```rust
@@ -388,7 +388,7 @@ The `testing` feature provides `TestApp` — a real Axum server bound to an ephe
 
 ```toml
 [dev-dependencies]
-socle = { version = "1.2", features = ["testing"] }
+socle = { version = "1.3", features = ["testing"] }
 ```
 
 ```rust
@@ -418,7 +418,7 @@ The `testing-postgres` feature spins up a real Postgres 16 container (via `testc
 
 ```toml
 [dev-dependencies]
-socle = { version = "1.2", features = ["testing-postgres"] }
+socle = { version = "1.3", features = ["testing-postgres"] }
 ```
 
 ```rust

@@ -5,6 +5,7 @@ use reqwest_middleware::{
     ClientBuilder as MiddlewareClientBuilder, ClientWithMiddleware, Middleware, Next,
     Result as MiddlewareResult,
 };
+use std::sync::Arc;
 
 use crate::request_id::CURRENT_REQUEST_ID;
 
@@ -90,6 +91,7 @@ impl Middleware for RequestIdMiddleware {
 pub fn builder() -> ClientBuilder {
     ClientBuilder {
         inner: reqwest::ClientBuilder::new(),
+        extra: Vec::new(),
     }
 }
 
@@ -97,6 +99,7 @@ pub fn builder() -> ClientBuilder {
 #[must_use = "ClientBuilder does nothing until you call .build()"]
 pub struct ClientBuilder {
     inner: reqwest::ClientBuilder,
+    extra: Vec<Arc<dyn Middleware>>,
 }
 
 impl Default for ClientBuilder {
@@ -127,16 +130,65 @@ impl ClientBuilder {
     }
 
     pub fn from_reqwest_builder(builder: reqwest::ClientBuilder) -> Self {
-        ClientBuilder { inner: builder }
+        ClientBuilder {
+            inner: builder,
+            extra: Vec::new(),
+        }
+    }
+
+    /// Append a custom middleware to the stack, after the built-in trace and
+    /// request-id middleware.
+    ///
+    /// Multiple calls compose in call order: `.with(A).with(B)` means A runs
+    /// before B.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # #[cfg(feature = "http-client")]
+    /// # mod example {
+    /// use async_trait::async_trait;
+    /// use reqwest_middleware::{Middleware, Next, Result as MiddlewareResult};
+    /// use socle::http_client;
+    ///
+    /// struct MyMiddleware;
+    ///
+    /// #[async_trait]
+    /// impl Middleware for MyMiddleware {
+    ///     async fn handle(
+    ///         &self,
+    ///         req: reqwest::Request,
+    ///         extensions: &mut http::Extensions,
+    ///         next: Next<'_>,
+    ///     ) -> MiddlewareResult<reqwest::Response> {
+    ///         next.run(req, extensions).await
+    ///     }
+    /// }
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = http_client::builder()
+    ///     .with(MyMiddleware)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// # }
+    /// ```
+    pub fn with(mut self, middleware: impl Middleware) -> Self {
+        self.extra.push(Arc::new(middleware));
+        self
     }
 
     pub fn build(self) -> Result<Client, reqwest::Error> {
         let reqwest_client = self.inner.build()?;
-        let client = MiddlewareClientBuilder::new(reqwest_client)
+        let mut builder = MiddlewareClientBuilder::new(reqwest_client)
             .with(TraceContextMiddleware)
-            .with(RequestIdMiddleware)
-            .build();
-        Ok(Client { inner: client })
+            .with(RequestIdMiddleware);
+        for mw in self.extra {
+            builder = builder.with_arc(mw);
+        }
+        Ok(Client {
+            inner: builder.build(),
+        })
     }
 }
 
@@ -297,5 +349,93 @@ mod tests {
         client.get(&url).send().await.unwrap();
         let headers = captured.lock().unwrap();
         assert!(!headers.iter().any(|(k, _)| k == "x-request-id"));
+    }
+
+    struct InjectHeader {
+        name: &'static str,
+        value: &'static str,
+    }
+
+    #[async_trait]
+    impl Middleware for InjectHeader {
+        async fn handle(
+            &self,
+            mut req: reqwest::Request,
+            extensions: &mut http::Extensions,
+            next: Next<'_>,
+        ) -> MiddlewareResult<reqwest::Response> {
+            if let (Ok(name), Ok(val)) = (
+                HeaderName::try_from(self.name),
+                HeaderValue::try_from(self.value),
+            ) {
+                req.headers_mut().insert(name, val);
+            }
+            next.run(req, extensions).await
+        }
+    }
+
+    #[tokio::test]
+    async fn with_single_middleware_is_called() {
+        let captured: CapturedHeaders = Arc::new(Mutex::new(vec![]));
+        let url = start_server(captured.clone()).await;
+        let client = builder()
+            .with(InjectHeader {
+                name: "x-custom",
+                value: "hello",
+            })
+            .build()
+            .unwrap();
+        client.get(&url).send().await.unwrap();
+        let headers = captured.lock().unwrap();
+        assert!(
+            headers.iter().any(|(k, v)| k == "x-custom" && v == "hello"),
+            "expected x-custom: hello, got: {headers:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn with_chained_middlewares_called_in_order() {
+        let order: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(vec![]));
+
+        struct RecordOrder {
+            label: &'static str,
+            order: Arc<Mutex<Vec<&'static str>>>,
+        }
+
+        #[async_trait]
+        impl Middleware for RecordOrder {
+            async fn handle(
+                &self,
+                req: reqwest::Request,
+                extensions: &mut http::Extensions,
+                next: Next<'_>,
+            ) -> MiddlewareResult<reqwest::Response> {
+                self.order.lock().unwrap().push(self.label);
+                next.run(req, extensions).await
+            }
+        }
+
+        let captured: CapturedHeaders = Arc::new(Mutex::new(vec![]));
+        let url = start_server(captured.clone()).await;
+        let client = builder()
+            .with(RecordOrder {
+                label: "A",
+                order: order.clone(),
+            })
+            .with(RecordOrder {
+                label: "B",
+                order: order.clone(),
+            })
+            .build()
+            .unwrap();
+        client.get(&url).send().await.unwrap();
+        let recorded = order.lock().unwrap();
+        assert_eq!(*recorded, vec!["A", "B"]);
+    }
+
+    #[tokio::test]
+    async fn build_without_with_is_unchanged() {
+        let client = builder().build();
+        assert!(client.is_ok());
     }
 }
