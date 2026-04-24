@@ -17,6 +17,12 @@ pub mod trace;
 #[cfg(feature = "testing")]
 pub use trace::{CaptureExporter, SpanRecord, init_capture_tracing};
 
+#[cfg(feature = "testing-postgres")]
+pub mod postgres;
+
+#[cfg(feature = "testing-postgres")]
+pub use postgres::EphemeralPostgres;
+
 #[cfg(feature = "testing")]
 mod test_client {
     /// A thin wrapper around `reqwest::Client` pre-pointed at a local test server.

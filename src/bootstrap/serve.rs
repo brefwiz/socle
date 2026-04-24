@@ -31,16 +31,16 @@ impl ServiceBootstrap {
     ///
     /// ```rust,no_run
     /// use axum::{Router, routing::get};
-    /// use socle::{BootstrapCtx, Result, ServiceBootstrap};
+    /// use socle::{BootstrapCtx, ServiceBootstrap};
     /// use tokio::net::TcpListener;
     ///
-    /// # #[tokio::main] async fn main() -> Result<()> {
-    /// let listener = TcpListener::bind("127.0.0.1:0").await?;
-    /// let addr = listener.local_addr()?;
+    /// # #[tokio::main] async fn main() {
+    /// # let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     /// ServiceBootstrap::new("my-service")
     ///     .with_router(|_: &BootstrapCtx| Router::new().route("/", get(|| async { "ok" })))
     ///     .serve_with_shutdown(listener, std::future::pending())
     ///     .await
+    ///     .unwrap()
     /// # }
     /// ```
     pub async fn serve_with_shutdown(

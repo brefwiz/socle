@@ -38,6 +38,7 @@ cursor = ["api-bones/base64"]
 testing = ["dep:reqwest"]
 http-client = ["dep:reqwest", "dep:reqwest-middleware", "dep:opentelemetry", "dep:async-trait", "dep:http"]
 metrics = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-prometheus", "dep:prometheus"]
+testing-postgres = ["dep:testcontainers", "dep:testcontainers-modules", "dep:sqlx"]
 
 [dependencies]
 axum = { version = "0.8", features = ["macros"] }
@@ -75,6 +76,9 @@ opentelemetry-prometheus = { version = "0.27", optional = true }
 prometheus = { version = "0.13", default-features = false, optional = true }
 
 validator = { version = "0.20", features = ["derive"], optional = true }
+
+testcontainers = { version = "0.27", optional = true }
+testcontainers-modules = { version = "0.15", features = ["postgres"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
