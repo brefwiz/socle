@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-04-24
+
+### Changed
+
+- **Breaking:** `ok()`, `created()`, and `listed()` now return `HandlerResponse<T>`, `CreatedResponse<T>`, and `HandlerListResponse<T>` respectively instead of bare tuples. Handlers that previously wrote `Ok(ok(value))` now write `ok(value)`. Callers that destructured the return value directly must add `.unwrap()` or handle the `Result`.
+
 ## [1.3.0] — 2026-04-24
 
 ### Added

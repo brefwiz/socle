@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "socle"
-version = "1.3.0"
+version = "2.0.0"
 dependencies = [
  "api-bones",
  "async-trait",

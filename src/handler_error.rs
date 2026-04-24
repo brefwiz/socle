@@ -95,37 +95,25 @@ pub type EtaggedHandlerResponse<T> = Result<
     HandlerError,
 >;
 
-/// Build the success value for a [`CreatedResponse`] handler (201 Created).
-pub fn created<T>(
-    value: T,
-) -> (
-    axum::http::StatusCode,
-    axum::Json<api_bones::ApiResponse<T>>,
-) {
-    (
+/// Build the success response for a [`CreatedResponse`] handler (201 Created).
+pub fn created<T>(value: T) -> CreatedResponse<T> {
+    Ok((
         axum::http::StatusCode::CREATED,
         axum::Json(api_bones::ApiResponse::builder(value).build()),
-    )
+    ))
 }
 
-/// Build the success value for a [`HandlerResponse`] handler (200 OK).
-pub fn ok<T>(
-    value: T,
-) -> (
-    axum::http::StatusCode,
-    axum::Json<api_bones::ApiResponse<T>>,
-) {
-    (
+/// Build the success response for a [`HandlerResponse`] handler (200 OK).
+pub fn ok<T>(value: T) -> HandlerResponse<T> {
+    Ok((
         axum::http::StatusCode::OK,
         axum::Json(api_bones::ApiResponse::builder(value).build()),
-    )
+    ))
 }
 
-/// Build the success value for a [`HandlerListResponse`] handler.
-pub fn listed<T>(
-    page: api_bones::PaginatedResponse<T>,
-) -> axum::Json<api_bones::ApiResponse<api_bones::PaginatedResponse<T>>> {
-    axum::Json(api_bones::ApiResponse::builder(page).build())
+/// Build the success response for a [`HandlerListResponse`] handler.
+pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T> {
+    Ok(axum::Json(api_bones::ApiResponse::builder(page).build()))
 }
 
 /// Build a Problem+JSON 500 response from a panic payload. Used in catch-panic layer.
@@ -197,7 +185,7 @@ mod tests {
 
     #[test]
     fn created_builds_201_with_envelope() {
-        let (status, body) = created("x");
+        let (status, body) = created("x").unwrap();
         assert_eq!(status, axum::http::StatusCode::CREATED);
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"], "x");
@@ -205,7 +193,7 @@ mod tests {
 
     #[test]
     fn ok_builds_200_with_envelope() {
-        let (status, body) = ok(42u32);
+        let (status, body) = ok(42u32).unwrap();
         assert_eq!(status, axum::http::StatusCode::OK);
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"], 42);
@@ -216,7 +204,7 @@ mod tests {
         use api_bones::{PaginatedResponse, pagination::PaginationParams};
         let page: PaginatedResponse<u32> =
             PaginatedResponse::new(vec![1, 2], 2, &PaginationParams::default());
-        let body = listed(page);
+        let body = listed(page).unwrap();
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"]["items"], serde_json::json!([1, 2]));
     }
