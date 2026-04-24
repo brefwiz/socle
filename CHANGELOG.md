@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-04-24
+
+### Changed
+
+- Bumped `opentelemetry_sdk` and `opentelemetry-prometheus` from `0.29` to `0.31`.
+
 ## [1.2.0] — 2026-04-23
 
 ### Added
