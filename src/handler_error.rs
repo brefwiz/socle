@@ -116,6 +116,15 @@ pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T
     Ok(axum::Json(api_bones::ApiResponse::builder(page).build()))
 }
 
+/// Build the success response for an [`EtaggedHandlerResponse`] handler (200 OK + ETag header).
+pub fn etagged<T>(etag: api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
+    Ok((
+        etag,
+        axum::http::StatusCode::OK,
+        axum::Json(api_bones::ApiResponse::builder(value).build()),
+    ))
+}
+
 /// Build a Problem+JSON 500 response from a panic payload. Used in catch-panic layer.
 pub(crate) fn panic_handler(err: Box<dyn std::any::Any + Send + 'static>) -> Response {
     let detail = if let Some(s) = err.downcast_ref::<String>() {
@@ -197,6 +206,17 @@ mod tests {
         assert_eq!(status, axum::http::StatusCode::OK);
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"], 42);
+    }
+
+    #[test]
+    fn etagged_builds_200_with_etag_and_envelope() {
+        use api_bones::etag::ETag;
+        let etag = ETag::strong("abc123");
+        let (out_etag, status, body) = etagged(etag.clone(), 99u32).unwrap();
+        assert_eq!(out_etag, etag);
+        assert_eq!(status, axum::http::StatusCode::OK);
+        let json = serde_json::to_value(body.0).unwrap();
+        assert_eq!(json["data"], 99);
     }
 
     #[test]

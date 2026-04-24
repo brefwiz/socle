@@ -52,7 +52,8 @@ pub use error::{Error, Result};
 pub use etag::{ETag, IfMatch, IfNoneMatch, check_if_match, etag_from_updated_at};
 pub use handler_error::{
     ApiError, CreatedResponse, ErrorCode, EtaggedHandlerResponse, HandlerError,
-    HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, listed, ok,
+    HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, etagged, listed,
+    ok,
 };
 pub use pagination::{
     CursorPaginatedResponse, CursorPagination, CursorPaginationParams, KeysetPaginatedResponse,

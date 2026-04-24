@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-04-24
+
+### Added
+
+- `etagged(etag, value)` — builder for [`EtaggedHandlerResponse`], mirrors `ok(v)` / `created(v)` / `listed(page)` ergonomics.
+
 ## [2.0.0] — 2026-04-24
 
 ### Changed
