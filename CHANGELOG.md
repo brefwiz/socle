@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-04-24
+
+### Fixed
+
+- `EtaggedHandlerResponse<T>` tuple order corrected to `(StatusCode, ETag, Json<ApiResponse<T>>)` — axum 0.8 requires `StatusCode` as the first element; the previous `(ETag, StatusCode, Json<...>)` order caused the `Handler` trait bound to fail at call sites.
+- `etagged(etag, value)` return tuple updated to match.
+
 ## [2.1.0] — 2026-04-24
 
 ### Added

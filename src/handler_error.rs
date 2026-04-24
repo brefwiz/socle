@@ -88,8 +88,8 @@ pub type CreatedResponse<T> = Result<
 /// Return type for read/update handlers that carry an ETag response header.
 pub type EtaggedHandlerResponse<T> = Result<
     (
-        api_bones::etag::ETag,
         axum::http::StatusCode,
+        api_bones::etag::ETag,
         axum::Json<api_bones::ApiResponse<T>>,
     ),
     HandlerError,
@@ -119,8 +119,8 @@ pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T
 /// Build the success response for an [`EtaggedHandlerResponse`] handler (200 OK + ETag header).
 pub fn etagged<T>(etag: api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
     Ok((
-        etag,
         axum::http::StatusCode::OK,
+        etag,
         axum::Json(api_bones::ApiResponse::builder(value).build()),
     ))
 }
@@ -212,9 +212,9 @@ mod tests {
     fn etagged_builds_200_with_etag_and_envelope() {
         use api_bones::etag::ETag;
         let etag = ETag::strong("abc123");
-        let (out_etag, status, body) = etagged(etag.clone(), 99u32).unwrap();
-        assert_eq!(out_etag, etag);
+        let (status, out_etag, body) = etagged(etag.clone(), 99u32).unwrap();
         assert_eq!(status, axum::http::StatusCode::OK);
+        assert_eq!(out_etag, etag);
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"], 99);
     }
