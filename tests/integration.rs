@@ -2,7 +2,7 @@
 //! random port, hit it with `reqwest`, assert responses.
 
 use axum::{Router, routing::get};
-use socle::{BootstrapCtx, ServiceBootstrap, testing::TestClient};
+use socle::{BootstrapCtx, ServiceBootstrap, assert_span, testing::TestClient};
 use tokio::sync::oneshot;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -105,4 +105,33 @@ async fn rate_limit_blocks_after_limit_exceeded() {
     assert_eq!(client.get("/").await.status(), 200);
     assert_eq!(client.get("/").await.status(), 200);
     assert_eq!(client.get("/").await.status(), 429);
+}
+
+// ── span capture ──────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn span_capture_records_closed_span() {
+    use socle::testing::trace::init_capture_tracing;
+
+    let exporter = init_capture_tracing();
+    exporter.drain(); // clear any spans from prior tests
+
+    tracing::info_span!("test_op").in_scope(|| {});
+
+    let spans = exporter.spans();
+    assert_span!(spans, name = "test_op");
+}
+
+#[tokio::test]
+async fn capture_exporter_drain_empties_buffer() {
+    use socle::testing::trace::init_capture_tracing;
+
+    let exporter = init_capture_tracing();
+    exporter.drain();
+
+    tracing::info_span!("drain_op").in_scope(|| {});
+
+    let drained = exporter.drain();
+    assert!(drained.iter().any(|s| s.name == "drain_op"));
+    assert!(exporter.spans().is_empty());
 }

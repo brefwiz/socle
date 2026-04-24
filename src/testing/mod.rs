@@ -6,6 +6,12 @@
 pub use test_client::TestClient;
 
 #[cfg(feature = "testing")]
+pub mod trace;
+
+#[cfg(feature = "testing")]
+pub use trace::{CaptureExporter, SpanRecord, init_capture_tracing};
+
+#[cfg(feature = "testing")]
 mod test_client {
     /// A thin wrapper around `reqwest::Client` pre-pointed at a local test server.
     pub struct TestClient {
