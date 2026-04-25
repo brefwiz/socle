@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- `OrgContextExtractor` — Axum `FromRequestParts` extractor that resolves `OrganizationContext` from a principal extension or `X-Org-Id`/`X-Org-Path` headers, with cross-tenant conflict detection.
+- `OrgIsolationLayer` — Tower middleware that short-circuits with `401 Unauthorized` when `OrganizationContext` is absent from request extensions.
+- `OrgContextSource` — enum recording which mechanism resolved the org context (`PrincipalClaim` or `Header`).
+- `OrgPolicy` trait + `AncestryOrgPolicy` — policy trait for org-scoped access control, with a default ancestry-based implementation.
+
 ## [2.4.0] — 2026-04-24
 
 ### Added

@@ -109,3 +109,11 @@ required-features = ["telemetry", "ratelimit-memory"]
 name = "integration"
 path = "tests/integration.rs"
 required-features = ["testing"]
+
+[[test]]
+name = "org_isolation"
+path = "tests/org_isolation.rs"
+
+[[test]]
+name = "org_policy"
+path = "tests/org_policy.rs"

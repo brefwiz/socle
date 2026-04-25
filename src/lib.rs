@@ -4,6 +4,12 @@
 //! shutdown in one builder. Public open-source facade extracted from an internal
 //! service kit.
 //!
+//! ## Recommended middleware ordering
+//!
+//! ```text
+//! RequestIdLayer → auth (placeholder) → OrgIsolationLayer → rate-limit → audit → handler
+//! ```
+//!
 //! ```rust,no_run
 //! use socle::{ServiceBootstrap, BootstrapCtx, Result};
 //! use axum::{Router, routing::get};
@@ -31,6 +37,9 @@ mod error;
 mod handler_error;
 mod request_id;
 
+pub mod org_isolation;
+pub mod org_policy;
+
 pub mod etag;
 pub mod extract;
 pub mod pagination;
@@ -55,6 +64,11 @@ pub use handler_error::{
     HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, etagged, listed,
     listed_page, ok,
 };
+pub use org_isolation::{
+    OrgContextExtractor, OrgContextSource, OrgIsolationLayer, OrgIsolationService,
+};
+pub use org_policy::{AncestryOrgPolicy, OrgPolicy};
+
 pub use pagination::{
     CursorPaginatedResponse, CursorPagination, CursorPaginationParams, KeysetPaginatedResponse,
     KeysetPaginationParams, PaginatedResponse, PaginationParams, SortDirection, SortParams,
@@ -76,6 +90,9 @@ pub use ports::rate_limit::RateLimitProvider;
 pub use ports::telemetry::{BasicTelemetryProvider, TelemetryProvider};
 
 // ── api-bones re-exports ──────────────────────────────────────────────────────
+
+pub use api_bones::org_context::OrganizationContext;
+pub use api_bones::org_id::{OrgId, OrgPath};
 
 pub use api_bones::common::{ResourceId, Timestamp};
 pub use api_bones::ratelimit::RateLimitInfo;
