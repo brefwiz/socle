@@ -67,9 +67,9 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "api-bones"
-version = "4.0.1"
+version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e167c9c1eac92725b26c0fc958a01696981d83128ebc4f860e3071fe1d006c0"
+checksum = "50772f5282534857e3da570b2c3148a8895827a029837d962f9fe68b8b166c2c"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3156,7 +3156,7 @@ dependencies = [
 
 [[package]]
 name = "socle"
-version = "2.5.1"
+version = "2.6.0"
 dependencies = [
  "api-bones",
  "async-nats",

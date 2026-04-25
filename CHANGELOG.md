@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.0] — 2026-04-25
+
+### Added
+
+- `created_under(prefix, value)` — composes a 201 Created Location header from
+  a route prefix + `value.id()` (requires `api_bones::HasId`). Decouples DTOs
+  from HTTP route paths while keeping the call site to one line.
+- Bump `api-bones` `4.0.1` → `4.5.0` (adds `HasId`).
+
 ## [2.5.1] — 2026-04-25
 
 ### Security

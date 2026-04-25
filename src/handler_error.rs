@@ -127,6 +127,19 @@ pub fn created_at<T>(location: &str, value: T) -> CreatedAtResponse<T> {
     ))
 }
 
+/// Build a 201 Created response whose Location header is composed from
+/// `prefix` + `/` + `value.id()`. The prefix is typically the route path
+/// (e.g. `"/v1/items"`); the id comes from the value's `HasId` impl.
+///
+/// Use this when the route is the source of truth for the URL pattern and
+/// the DTO only commits to "I have an id." Trailing slashes on `prefix`
+/// are trimmed so `"/v1/items/"` and `"/v1/items"` produce the same
+/// Location.
+pub fn created_under<T: api_bones::HasId>(prefix: &str, value: T) -> CreatedAtResponse<T> {
+    let location = format!("{}/{}", prefix.trim_end_matches('/'), value.id());
+    created_at(&location, value)
+}
+
 /// Build the success response for a [`HandlerResponse`] handler (200 OK).
 pub fn ok<T>(value: T) -> HandlerResponse<T> {
     Ok((
@@ -305,5 +318,44 @@ mod tests {
         let body = listed_page::<u32, u64>(items, &params).unwrap();
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"]["items"].as_array().unwrap().len(), 20);
+    }
+
+    #[test]
+    fn created_under_composes_location() {
+        struct R {
+            id: u64,
+        }
+        impl api_bones::HasId for R {
+            type Id = u64;
+            fn id(&self) -> &u64 {
+                &self.id
+            }
+        }
+        let resp = created_under("/v1/widgets", R { id: 7 }).unwrap();
+        let (status, headers, _body) = resp;
+        assert_eq!(status, axum::http::StatusCode::CREATED);
+        assert_eq!(
+            headers.get(axum::http::header::LOCATION).unwrap(),
+            "/v1/widgets/7"
+        );
+    }
+
+    #[test]
+    fn created_under_trims_trailing_slash() {
+        struct R {
+            id: String,
+        }
+        impl api_bones::HasId for R {
+            type Id = String;
+            fn id(&self) -> &String {
+                &self.id
+            }
+        }
+        let resp = created_under("/v1/things/", R { id: "abc".into() }).unwrap();
+        let (_, headers, _) = resp;
+        assert_eq!(
+            headers.get(axum::http::header::LOCATION).unwrap(),
+            "/v1/things/abc"
+        );
     }
 }
