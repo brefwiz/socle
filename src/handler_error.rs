@@ -85,6 +85,16 @@ pub type CreatedResponse<T> = Result<
     HandlerError,
 >;
 
+/// Return type for handlers that create a resource and return it with a 201 status and Location header.
+pub type CreatedAtResponse<T> = Result<
+    (
+        axum::http::StatusCode,
+        axum::http::HeaderMap,
+        axum::Json<api_bones::ApiResponse<T>>,
+    ),
+    HandlerError,
+>;
+
 /// Return type for read/update handlers that carry an ETag response header.
 pub type EtaggedHandlerResponse<T> = Result<
     (
@@ -99,6 +109,20 @@ pub type EtaggedHandlerResponse<T> = Result<
 pub fn created<T>(value: T) -> CreatedResponse<T> {
     Ok((
         axum::http::StatusCode::CREATED,
+        axum::Json(api_bones::ApiResponse::builder(value).build()),
+    ))
+}
+
+/// Build the success response for a [`CreatedAtResponse`] handler (201 Created + Location header).
+pub fn created_at<T>(location: &str, value: T) -> CreatedAtResponse<T> {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::LOCATION,
+        location.parse().expect("valid Location URI"),
+    );
+    Ok((
+        axum::http::StatusCode::CREATED,
+        headers,
         axum::Json(api_bones::ApiResponse::builder(value).build()),
     ))
 }

@@ -60,9 +60,9 @@ pub use config::{BootstrapConfig, CorsConfig, LogFormat, RateLimitConfig, RateLi
 pub use error::{Error, Result};
 pub use etag::{ETag, IfMatch, IfNoneMatch, check_if_match, etag_from_updated_at};
 pub use handler_error::{
-    ApiError, CreatedResponse, ErrorCode, EtaggedHandlerResponse, HandlerError,
-    HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, etagged, listed,
-    listed_page, ok,
+    ApiError, CreatedAtResponse, CreatedResponse, ErrorCode, EtaggedHandlerResponse, HandlerError,
+    HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, created_at,
+    etagged, listed, listed_page, ok,
 };
 pub use org_isolation::{
     OrgContextExtractor, OrgContextSource, OrgIsolationLayer, OrgIsolationService,
