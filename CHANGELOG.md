@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.1] — 2026-04-25
+
+### Security
+
+- Bump `async-nats` `0.38` → `0.47` to pull in `rustls-webpki >=0.103.13`, fixing [RUSTSEC-2026-0104](https://rustsec.org/advisories/RUSTSEC-2026-0104) (reachable panic in CRL parsing). Affects the `nats` feature only.
+
 ## [2.5.0] — 2026-04-25
 
 ### Added

@@ -1,6 +1,6 @@
 [package]
 name = "socle"
-version = "2.5.0"
+version = "2.5.1"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
@@ -83,7 +83,7 @@ validator = { version = "0.20", features = ["derive"], optional = true }
 testcontainers = { version = "0.27", optional = true }
 testcontainers-modules = { version = "0.15", features = ["postgres"], optional = true }
 
-async-nats = { version = "0.38", optional = true }
+async-nats = { version = "0.47", optional = true }
 metrics-api = { package = "metrics", version = "0.23", optional = true }
 
 [dev-dependencies]
