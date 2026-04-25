@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-04-24
+
+### Added
+
+- `listed_page<T, U>(items, params)` — ergonomic helper that paginates a fully-loaded `Vec<T>`, maps each item to `U` via `Into`, and returns a `HandlerListResponse<U>`. Eliminates the skip/take/total boilerplate repeated across client-side pagination handlers.
+
 ## [2.3.1] — 2026-04-24
 
 ### Fixed

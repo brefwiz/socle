@@ -116,6 +116,37 @@ pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T
     Ok(axum::Json(api_bones::ApiResponse::builder(page).build()))
 }
 
+/// Paginate a fully-loaded `Vec<T>`, map each item to `U`, and return a [`HandlerListResponse`].
+///
+/// Combines the common client-side pagination boilerplate (skip/take + total) into one call:
+///
+/// ```rust,no_run
+/// use socle::{HandlerListResponse, listed_page};
+/// use socle::pagination::PaginationParams;
+///
+/// async fn list_items(params: PaginationParams) -> HandlerListResponse<String> {
+///     let all: Vec<String> = vec!["a".into(), "b".into()];
+///     listed_page(all, &params)
+/// }
+/// ```
+pub fn listed_page<T, U>(
+    items: Vec<T>,
+    params: &api_bones::pagination::PaginationParams,
+) -> HandlerListResponse<U>
+where
+    T: Into<U>,
+    U: serde::Serialize,
+{
+    let total = items.len() as u64;
+    let page: Vec<U> = items
+        .into_iter()
+        .skip(params.offset.unwrap_or(0) as usize)
+        .take(params.limit.unwrap_or(20) as usize)
+        .map(Into::into)
+        .collect();
+    listed(api_bones::PaginatedResponse::new(page, total, params))
+}
+
 /// Build the success response for an [`EtaggedHandlerResponse`] handler (200 OK + ETag header).
 pub fn etagged<T>(etag: api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
     Ok((
@@ -227,5 +258,28 @@ mod tests {
         let body = listed(page).unwrap();
         let json = serde_json::to_value(body.0).unwrap();
         assert_eq!(json["data"]["items"], serde_json::json!([1, 2]));
+    }
+
+    #[test]
+    fn listed_page_maps_and_paginates() {
+        use api_bones::pagination::PaginationParams;
+        let items: Vec<u32> = (1..=5).collect();
+        let params = PaginationParams {
+            offset: Some(1),
+            limit: Some(2),
+        };
+        let body = listed_page::<u32, u64>(items, &params).unwrap();
+        let json = serde_json::to_value(body.0).unwrap();
+        assert_eq!(json["data"]["items"], serde_json::json!([2, 3]));
+    }
+
+    #[test]
+    fn listed_page_uses_defaults_when_params_are_none() {
+        use api_bones::pagination::PaginationParams;
+        let items: Vec<u32> = (1..=25).collect();
+        let params = PaginationParams::default();
+        let body = listed_page::<u32, u64>(items, &params).unwrap();
+        let json = serde_json::to_value(body.0).unwrap();
+        assert_eq!(json["data"]["items"].as_array().unwrap().len(), 20);
     }
 }
