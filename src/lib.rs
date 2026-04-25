@@ -40,6 +40,7 @@ mod request_id;
 pub mod org_isolation;
 pub mod org_policy;
 
+pub mod audit;
 pub mod etag;
 pub mod extract;
 pub mod pagination;
@@ -55,6 +56,10 @@ pub mod metrics;
 
 // ── Public surface ────────────────────────────────────────────────────────────
 
+pub use audit::{
+    AuditAnnotation, AuditAnnotationSlot, AuditEvent, AuditFilter, AuditLayer, AuditService,
+    AuditSink, AuditSinkError, TracingAuditSink,
+};
 pub use bootstrap::{BootstrapCtx, ServiceBootstrap, ShutdownHookFn};
 pub use config::{BootstrapConfig, CorsConfig, LogFormat, RateLimitConfig, RateLimitKind};
 pub use error::{Error, Result};
@@ -64,6 +69,13 @@ pub use handler_error::{
     HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, created_at,
     etagged, listed, listed_page, ok,
 };
+
+#[cfg(feature = "test-util")]
+pub use audit::ChannelAuditSink;
+
+#[cfg(feature = "nats")]
+pub use audit::NatsJetStreamAuditSink;
+
 pub use org_isolation::{
     OrgContextExtractor, OrgContextSource, OrgIsolationLayer, OrgIsolationService,
 };

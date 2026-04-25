@@ -91,6 +91,14 @@ pub struct ServiceBootstrap {
     /// rate-limit layer and before any `with_layer` extensions.
     pub(crate) auth_provider: Option<Box<dyn AuthProvider>>,
 
+    /// Pluggable audit sink. When set, wraps the router with [`AuditLayer`]
+    /// applied after auth and before any `with_layer` extensions.
+    pub(crate) audit_sink: Option<std::sync::Arc<dyn crate::audit::AuditSink>>,
+
+    /// Filter for the audit layer. Defaults to [`AuditFilter::default`] when
+    /// `audit_sink` is set and no custom filter is provided.
+    pub(crate) audit_filter: Option<crate::audit::AuditFilter>,
+
     pub(crate) cors: Option<CorsLayer>,
     pub(crate) router_builder: Option<RouterBuilder>,
     pub(crate) version: String,
@@ -133,6 +141,8 @@ impl ServiceBootstrap {
             ratelimit_extractor: RateLimitExtractor::Ip,
             rate_limit_provider: None,
             auth_provider: None,
+            audit_sink: None,
+            audit_filter: None,
             cors: None,
             router_builder: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -452,6 +462,32 @@ impl ServiceBootstrap {
     /// [`with_layer`]: ServiceBootstrap::with_layer
     pub fn with_auth_provider<P: AuthProvider>(mut self, provider: P) -> Self {
         self.auth_provider = Some(Box::new(provider));
+        self
+    }
+
+    // ── Audit ──────────────────────────────────────────────────────────────────
+
+    /// Attach a pluggable audit sink.
+    ///
+    /// When set, [`AuditLayer`] is applied after auth and before any
+    /// [`with_layer`] extensions.  Pass any type that implements [`AuditSink`].
+    ///
+    /// [`AuditLayer`]: crate::audit::AuditLayer
+    /// [`AuditSink`]: crate::audit::AuditSink
+    /// [`with_layer`]: ServiceBootstrap::with_layer
+    pub fn with_audit_sink(mut self, sink: std::sync::Arc<dyn crate::audit::AuditSink>) -> Self {
+        self.audit_sink = Some(sink);
+        self
+    }
+
+    /// Override the default [`AuditFilter`].
+    ///
+    /// Has no effect unless [`with_audit_sink`] is also called.
+    ///
+    /// [`AuditFilter`]: crate::audit::AuditFilter
+    /// [`with_audit_sink`]: ServiceBootstrap::with_audit_sink
+    pub fn with_audit_filter(mut self, filter: crate::audit::AuditFilter) -> Self {
+        self.audit_filter = Some(filter);
         self
     }
 
