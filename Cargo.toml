@@ -29,6 +29,9 @@ database = ["dep:sqlx"]
 ratelimit = []
 ratelimit-memory = ["ratelimit", "dep:governor"]
 
+nats = ["dep:async-nats", "dep:metrics-api"]
+test-util = []
+
 openapi = ["dep:utoipa", "dep:utoipa-swagger-ui"]
 
 validation = ["dep:validator"]
@@ -80,6 +83,9 @@ validator = { version = "0.20", features = ["derive"], optional = true }
 testcontainers = { version = "0.27", optional = true }
 testcontainers-modules = { version = "0.15", features = ["postgres"], optional = true }
 
+async-nats = { version = "0.38", optional = true }
+metrics-api = { package = "metrics", version = "0.23", optional = true }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
@@ -117,3 +123,17 @@ path = "tests/org_isolation.rs"
 [[test]]
 name = "org_policy"
 path = "tests/org_policy.rs"
+
+[[test]]
+name = "audit_filter"
+path = "tests/audit_filter.rs"
+
+[[test]]
+name = "audit_layer"
+path = "tests/audit_layer.rs"
+required-features = ["test-util"]
+
+[[test]]
+name = "audit_sinks"
+path = "tests/audit_sinks.rs"
+required-features = ["test-util"]

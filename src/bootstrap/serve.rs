@@ -56,6 +56,8 @@ impl ServiceBootstrap {
         let extra_layers = self.extra_layers;
         let rate_limit_provider = self.rate_limit_provider;
         let auth_provider = self.auth_provider;
+        let audit_sink = self.audit_sink;
+        let audit_filter = self.audit_filter;
         let cors = self.cors;
         let router_builder = self.router_builder;
         let version = self.version;
@@ -219,6 +221,16 @@ impl ServiceBootstrap {
         // counted) and before extra_layers.
         if let Some(provider) = auth_provider {
             app = provider.apply(app);
+        }
+
+        // Audit — applied after auth so principal context is available.
+        if let Some(sink) = audit_sink {
+            let layer = crate::audit::AuditLayer::new(sink);
+            let layer = match audit_filter {
+                Some(f) => layer.with_filter(f),
+                None => layer,
+            };
+            app = app.layer(layer);
         }
 
         // Extra layers registered via with_layer() — applied innermost first.
