@@ -67,10 +67,8 @@ use crate::{
     ETag,
     handler_error::{HandlerError, RfcOk},
 };
-use api_bones::pagination::{
-    CursorPaginatedResponse, KeysetPaginatedResponse, PaginatedResponse,
-};
 use api_bones::bulk::BulkResponse;
+use api_bones::pagination::{CursorPaginatedResponse, KeysetPaginatedResponse, PaginatedResponse};
 
 // ── Low-level RfcOk accessors ─────────────────────────────────────────────────
 
@@ -93,9 +91,7 @@ pub fn payload<T: DeserializeOwned>(ok: RfcOk<T>) -> T {
 /// Extract the `PaginatedResponse<T>` payload from an `RfcOk<PaginatedResponse<T>>`.
 ///
 /// Use with `HandlerListResponse<T>`.
-pub fn list_payload<T: DeserializeOwned>(
-    ok: RfcOk<PaginatedResponse<T>>,
-) -> PaginatedResponse<T> {
+pub fn list_payload<T: DeserializeOwned>(ok: RfcOk<PaginatedResponse<T>>) -> PaginatedResponse<T> {
     deserialize_data(ok)
 }
 
@@ -148,9 +144,7 @@ pub fn etag_header<T>(ok: &RfcOk<T>) -> ETag {
 /// Unwrap a `Result<RfcOk<T>, HandlerError>` and return the `T` payload.
 ///
 /// Panics with a clear message on `Err`.
-pub fn unwrap_ok<T: DeserializeOwned>(
-    result: Result<RfcOk<T>, HandlerError>,
-) -> T {
+pub fn unwrap_ok<T: DeserializeOwned>(result: Result<RfcOk<T>, HandlerError>) -> T {
     payload(result.expect("handler returned Err, expected Ok"))
 }
 
