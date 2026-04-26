@@ -211,9 +211,9 @@ pub fn unwrap_err<T>(result: Result<RfcOk<T>, HandlerError>) -> HandlerError {
     }
 }
 
-/// Unwrap a handler error and return its HTTP status code.
+/// Unwrap a handler error and return its HTTP status code as a `u16`.
 ///
 /// Equivalent to `unwrap_err(result).0.status_code()` but more readable.
-pub fn unwrap_err_status<T>(result: Result<RfcOk<T>, HandlerError>) -> StatusCode {
+pub fn unwrap_err_status<T>(result: Result<RfcOk<T>, HandlerError>) -> u16 {
     unwrap_err(result).0.status_code()
 }
