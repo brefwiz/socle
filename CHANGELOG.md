@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.1] — 2026-04-26
+
+### Added
+
+- **`testing::handler_assert`** — typed assertion helpers for `RfcOk<T>`-returning handler unit tests (gated on `rfc-types`, no extra feature flag required). Covers the full api-bones payload surface:
+  - `payload<T>` / `list_payload<T>` / `cursor_payload<T>` / `keyset_payload<T>` / `bulk_payload<T>` — extract typed data from `RfcOk<T>` without `T: Debug`
+  - `status` / `headers` / `etag_header` — low-level header accessors
+  - `unwrap_ok` / `unwrap_list` / `unwrap_cursor` / `unwrap_keyset` / `unwrap_bulk` — convenience unwraps for `Result<RfcOk<T>, HandlerError>`
+  - `unwrap_status` — returns `(StatusCode, T)` in one call
+  - `unwrap_created` — returns `(StatusCode, HeaderMap, T)` for `CreatedAtResponse` handlers
+  - `unwrap_err` / `unwrap_err_status` — extract the error without a `Debug` bound on `T`
+
 ## [3.0.0] — 2026-04-26
 
 ### Breaking changes

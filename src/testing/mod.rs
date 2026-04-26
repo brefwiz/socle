@@ -2,6 +2,9 @@
 //!
 //! Enabled by the `testing` feature.
 
+#[cfg(feature = "rfc-types")]
+pub mod handler_assert;
+
 #[cfg(feature = "testing")]
 pub use test_client::TestClient;
 
