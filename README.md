@@ -23,7 +23,7 @@ This is the problem that gets worse in the AI era. An agent scaffolding a new se
 
 ```toml
 [dependencies]
-socle = "2.0"
+socle = "3.0"
 ```
 
 ```rust
@@ -46,6 +46,77 @@ async fn main() -> Result<()> {
 See [`examples/`](examples/) for runnable examples.
 
 ## Use cases
+
+### RFC-oriented response types — compile-time enforced (3.0)
+
+socle 3.0 makes it impossible to accidentally bypass the platform response contract. Every handler success arm is a sealed [`RfcOk<T>`] value that can only be produced by the builder functions below — `Ok((StatusCode, Json(...)))` is a compile error.
+
+| Builder | Type alias | Status | Extra headers |
+|---|---|---|---|
+| `ok(value)` | `HandlerResponse<T>` | 200 | — |
+| `created(value)` | `CreatedResponse<T>` | 201 | — |
+| `created_at(location, value)` | `CreatedAtResponse<T>` | 201 | `Location` |
+| `created_under(prefix, value)` | `CreatedAtResponse<T>` | 201 | `Location` (from `HasId`) |
+| `etagged(etag, value)` | `EtaggedHandlerResponse<T>` | 200 | `ETag` |
+| `listed(page)` | `HandlerListResponse<T>` | 200 | — |
+| `listed_page(items, params)` | `HandlerListResponse<T>` | 200 | — |
+
+The error arm is always `HandlerError`, which serializes as `application/problem+json` (RFC 9457). The body is always `ApiResponse<T>` JSON. Both are enforced by the type system.
+
+```rust
+use socle::{HandlerResponse, HandlerListResponse, CreatedAtResponse};
+use socle::pagination::PaginationParams;
+
+// 200 OK — ApiResponse<Order>
+async fn get_order(/* ... */) -> HandlerResponse<Order> {
+    let order = fetch_order(id).await.map_err(HandlerError::from_sqlx)?;
+    socle::ok(order)
+}
+
+// 200 OK — ApiResponse<PaginatedResponse<Order>>
+async fn list_orders(Query(params): Query<PaginationParams>) -> HandlerListResponse<Order> {
+    let (items, total) = repo.list(params.limit(), params.offset()).await?;
+    socle::listed(PaginatedResponse::new(items, total, &params))
+}
+
+// 201 Created — ApiResponse<Order> + Location header
+async fn create_order(/* ... */) -> CreatedAtResponse<Order> {
+    let order = repo.insert(body).await?;
+    socle::created_under("/v1/orders", order) // Location: /v1/orders/{order.id()}
+}
+```
+
+**Testing** — `RfcOk<T>` exposes `.status()`, `.headers()`, and `.body_json()` for assertions without making the handler async:
+
+```rust
+#[test]
+fn ok_wraps_in_envelope() {
+    let resp = socle::ok(42u32).unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.body_json()["data"], 42);
+}
+```
+
+#### Opt-out: `UnconstrainedResponse`
+
+For routes whose wire format is externally mandated and incompatible with `ApiResponse<T>` — for example, OpenAI-compatible endpoints that must match the `{ "error": { "message", "type", "code" } }` shape so that existing client SDKs work without modification — return `UnconstrainedResponse`:
+
+```rust
+use socle::UnconstrainedResponse;
+
+// PRODUCT CONSTRAINT: /v1/chat/completions must be wire-compatible with the OpenAI
+// API. Existing client SDKs (openai-python, @openai/openai, LangChain) expect the
+// OpenAI wire shape and would break if served ApiResponse<T> or RFC 9457 errors.
+async fn chat_completions(/* ... */) -> UnconstrainedResponse {
+    UnconstrainedResponse::new((StatusCode::OK, Json(openai_response)))
+}
+```
+
+Every use of `UnconstrainedResponse` must be accompanied by a comment stating the product-level constraint. Absent that explanation, the opt-out is not acceptable in code review.
+
+The `rfc-types` Cargo feature (default: on) controls whether `RfcOk<T>` is sealed. Disabling it reverts to the pre-3.0 type aliases — use this only during a migration window, never in production without documenting why.
+
+---
 
 ### Config-driven bootstrap
 
@@ -234,25 +305,24 @@ ServiceBootstrap::new("orders-service")
 
 ```rust
 use socle::{HandlerError, HandlerResponse};
-use axum::http::StatusCode;
-use api_bones::ApiResponse;
 
 async fn get_order(/* ... */) -> HandlerResponse<Order> {
-    let row = sqlx::query_as!(Order, "SELECT * FROM orders WHERE id = $1", id)
+    let order = sqlx::query_as!(Order, "SELECT * FROM orders WHERE id = $1", id)
         .fetch_one(&pool)
         .await
         .map_err(|e| HandlerError::from_sqlx(&e))?; // RowNotFound → 404, unique → 409
 
-    Ok(socle::ok(row))
+    socle::ok(order) // 200 + ApiResponse<Order>
 }
 ```
 
-The `ok`, `created`, and `listed` helpers build typed `ApiResponse` envelopes:
+The builder functions return the correct type directly — no `Ok(...)` wrapper needed:
 
 ```rust
-Ok(socle::ok(order))                   // 200 with ApiResponse<Order>
-Ok(socle::created(order))              // 201 with ApiResponse<Order>
-Ok(socle::listed(paginated_response))  // 200 with ApiResponse<PaginatedResponse<Order>>
+socle::ok(order)                          // HandlerResponse<Order>      — 200
+socle::created(order)                     // CreatedResponse<Order>      — 201
+socle::created_under("/v1/orders", order) // CreatedAtResponse<Order>    — 201 + Location
+socle::listed(paginated_response)         // HandlerListResponse<Order>  — 200
 ```
 
 ### ETags and conditional updates
@@ -260,7 +330,7 @@ Ok(socle::listed(paginated_response))  // 200 with ApiResponse<PaginatedResponse
 Derive a weak ETag from a row's `updated_at` timestamp and validate `If-Match` headers before mutation:
 
 ```rust
-use socle::{etag_from_updated_at, check_if_match, EtaggedHandlerResponse};
+use socle::{etag_from_updated_at, check_if_match, EtaggedHandlerResponse, HandlerError};
 use axum::http::HeaderMap;
 
 async fn update_order(
@@ -269,10 +339,10 @@ async fn update_order(
 ) -> EtaggedHandlerResponse<Order> {
     let order = fetch_order(id).await?;
     let etag = etag_from_updated_at(order.updated_at);
-    check_if_match(&headers, &etag)?; // 412 if stale
+    check_if_match(&headers, &etag).map_err(HandlerError::from)?; // 412 if stale
 
     let updated = apply_patch(order, patch).await?;
-    Ok((etag_from_updated_at(updated.updated_at), StatusCode::OK, Json(ok(updated))))
+    socle::etagged(etag_from_updated_at(updated.updated_at), updated)
 }
 ```
 
@@ -281,7 +351,7 @@ async fn update_order(
 The `Valid<T>` extractor (feature `validation`) runs `validator` field validations before the handler is invoked. Invalid requests get a 422 with per-field error details automatically.
 
 ```rust
-use socle::Valid;
+use socle::{Valid, HandlerResponse};
 use serde::Deserialize;
 use validator::Validate;
 
@@ -293,8 +363,9 @@ struct CreateOrder {
     quantity: u32,
 }
 
-async fn create_order(Valid(body): Valid<CreateOrder>) -> impl IntoResponse {
+async fn create_order(Valid(body): Valid<CreateOrder>) -> HandlerResponse<Order> {
     // body is already validated; invalid requests never reach here
+    socle::ok(Order::from(body))
 }
 ```
 
@@ -388,7 +459,7 @@ The `testing` feature provides `TestApp` — a real Axum server bound to an ephe
 
 ```toml
 [dev-dependencies]
-socle = { version = "2.0", features = ["testing"] }
+socle = { version = "3.0", features = ["testing"] }
 ```
 
 ```rust
@@ -418,7 +489,7 @@ The `testing-postgres` feature spins up a real Postgres 16 container (via `testc
 
 ```toml
 [dev-dependencies]
-socle = { version = "2.0", features = ["testing-postgres"] }
+socle = { version = "3.0", features = ["testing-postgres"] }
 ```
 
 ```rust
@@ -439,6 +510,37 @@ async fn test_with_real_database() {
 ```
 
 `EphemeralPostgres` also exposes `connection_url()` if you need to pass the URL to a migration tool or a `ServiceBootstrap` under test.
+
+### Unit testing handlers
+
+`RfcOk<T>` exposes `.status()`, `.headers()`, and `.body_json()` for synchronous handler unit tests — no async body reading required:
+
+```rust
+use socle::{ok, created_under, HandlerError, ErrorCode};
+
+#[test]
+fn get_returns_200_with_envelope() {
+    let resp = ok(42u32).unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.body_json()["data"], 42);
+}
+
+#[test]
+fn create_sets_location_header() {
+    let item = MyItem { id: uuid::Uuid::now_v7(), name: "foo".into() };
+    let resp = created_under("/v1/items", item).unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    assert!(resp.headers().get("location").unwrap().to_str().unwrap()
+        .starts_with("/v1/items/"));
+}
+
+#[test]
+fn handler_error_maps_to_problem_json() {
+    use axum::response::IntoResponse;
+    let err = HandlerError::new(ErrorCode::ResourceNotFound, "not found");
+    assert_eq!(err.into_response().status(), 404);
+}
+```
 
 ### In-memory span capture
 
@@ -582,6 +684,7 @@ Layers are applied in this order, outermost first (request processing goes top-t
 
 | Feature | Default | What it adds |
 |---------|:-------:|--------------|
+| `rfc-types` | ✓ | Sealed `RfcOk<T>` — compile-time enforcement of `ApiResponse<T>` on all handler success arms |
 | `telemetry` | ✓ | `tracing-subscriber` JSON/pretty setup via `with_telemetry()` |
 | `database` | ✓ | `sqlx::PgPool` construction and migrations |
 | `ratelimit-memory` | ✓ | In-process GCRA rate limiter via `governor` |
@@ -594,6 +697,8 @@ Layers are applied in this order, outermost first (request processing goes top-t
 | `metrics` | — | RED metrics Tower layer + Prometheus registry integration |
 | `testing` | — | `TestApp` ephemeral server + `TestClient` + `CaptureExporter` |
 | `testing-postgres` | — | `EphemeralPostgres` Docker-backed Postgres for integration tests |
+
+Disabling `rfc-types` reverts handler type aliases to their pre-3.0 unconstrained forms. Use this only during a migration window; document the reason.
 
 ## Prior art
 

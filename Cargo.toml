@@ -1,6 +1,6 @@
 [package]
 name = "socle"
-version = "2.6.0"
+version = "3.0.0"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
@@ -18,9 +18,17 @@ features = ["telemetry", "database", "ratelimit-memory", "dotenv", "validation",
 no-default-features = true
 
 [features]
-default = ["telemetry", "database", "ratelimit-memory", "openapi", "dotenv"]
+default = ["telemetry", "database", "ratelimit-memory", "openapi", "dotenv", "rfc-types"]
 
 dotenv = ["dep:dotenvy"]
+
+# Enforce RFC-oriented api-bones response types at compile time.
+# When enabled (the default), handler success responses must be constructed
+# via the socle builder functions (ok, created, created_at, created_under,
+# listed, listed_page, etagged).  Direct tuple construction of Ok arms is
+# rejected by the compiler.  Disable only during a migration window; document
+# the reason.  Use UnconstrainedResponse for per-handler opt-outs instead.
+rfc-types = []
 
 telemetry = []
 
