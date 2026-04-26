@@ -260,10 +260,8 @@ mod type_aliases {
     >;
 
     /// Return type for handlers that return a paginated collection (200 OK).
-    pub type HandlerListResponse<T> = Result<
-        axum::Json<api_bones::ApiResponse<api_bones::PaginatedResponse<T>>>,
-        HandlerError,
-    >;
+    pub type HandlerListResponse<T> =
+        Result<axum::Json<api_bones::ApiResponse<api_bones::PaginatedResponse<T>>>, HandlerError>;
 
     /// Return type for handlers that create a resource (201 Created).
     pub type CreatedResponse<T> = Result<
@@ -392,7 +390,9 @@ pub fn ok<T>(value: T) -> HandlerResponse<T> {
 
 /// Build the success response for a [`HandlerListResponse`] handler.
 #[cfg(feature = "rfc-types")]
-pub fn listed<T: serde::Serialize>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T> {
+pub fn listed<T: serde::Serialize>(
+    page: api_bones::PaginatedResponse<T>,
+) -> HandlerListResponse<T> {
     let body = serde_json::to_vec(&api_bones::ApiResponse::builder(page).build())
         .expect("ApiResponse<PaginatedResponse<T>> is always serializable");
     Ok(RfcOk::new(
@@ -447,7 +447,8 @@ pub fn etagged<T: serde::Serialize>(
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(
         axum::http::header::ETAG,
-        axum::http::HeaderValue::from_str(&etag.to_string()).expect("ETag is always a valid header value"),
+        axum::http::HeaderValue::from_str(&etag.to_string())
+            .expect("ETag is always a valid header value"),
     );
     let body = serde_json::to_vec(&api_bones::ApiResponse::builder(value).build())
         .expect("ApiResponse<T> is always serializable");
@@ -583,7 +584,10 @@ mod tests {
         fn listed_page_maps_and_paginates() {
             use api_bones::pagination::PaginationParams;
             let items: Vec<u32> = (1..=5).collect();
-            let params = PaginationParams { offset: Some(1), limit: Some(2) };
+            let params = PaginationParams {
+                offset: Some(1),
+                limit: Some(2),
+            };
             let json = listed_page::<u32, u64>(items, &params).unwrap().body_json();
             assert_eq!(json["data"]["items"], serde_json::json!([2, 3]));
         }
@@ -600,10 +604,14 @@ mod tests {
 
         #[test]
         fn created_under_composes_location() {
-            struct R { id: u64 }
+            struct R {
+                id: u64,
+            }
             impl api_bones::HasId for R {
                 type Id = u64;
-                fn id(&self) -> &u64 { &self.id }
+                fn id(&self) -> &u64 {
+                    &self.id
+                }
             }
             impl serde::Serialize for R {
                 fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
@@ -620,10 +628,14 @@ mod tests {
 
         #[test]
         fn created_under_trims_trailing_slash() {
-            struct R { id: String }
+            struct R {
+                id: String,
+            }
             impl api_bones::HasId for R {
                 type Id = String;
-                fn id(&self) -> &String { &self.id }
+                fn id(&self) -> &String {
+                    &self.id
+                }
             }
             impl serde::Serialize for R {
                 fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
