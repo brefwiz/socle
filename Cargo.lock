@@ -3156,7 +3156,7 @@ dependencies = [
 
 [[package]]
 name = "socle"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "api-bones",
  "async-nats",
