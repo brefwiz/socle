@@ -66,9 +66,12 @@ pub use error::{Error, Result};
 pub use etag::{ETag, IfMatch, IfNoneMatch, check_if_match, etag_from_updated_at};
 pub use handler_error::{
     ApiError, CreatedAtResponse, CreatedResponse, ErrorCode, EtaggedHandlerResponse, HandlerError,
-    HandlerListResponse, HandlerResponse, ProblemJson, ValidationError, created, created_at,
-    created_under, etagged, listed, listed_page, ok,
+    HandlerListResponse, HandlerResponse, ProblemJson, UnconstrainedResponse, ValidationError,
+    created, created_at, created_under, etagged, listed, listed_page, ok,
 };
+
+#[cfg(feature = "rfc-types")]
+pub use handler_error::RfcOk;
 
 #[cfg(feature = "test-util")]
 pub use audit::ChannelAuditSink;

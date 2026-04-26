@@ -1,5 +1,77 @@
 # Changelog
 
+## [3.0.0] — 2026-04-26
+
+### Breaking changes
+
+Handler success arms are now sealed — direct `Ok((StatusCode, Json(...)))` construction no longer compiles when the `rfc-types` feature is active (the new default).
+
+**Before:**
+```rust
+async fn get_item(id: Uuid) -> HandlerResponse<Item> {
+    let item = fetch(id).await?;
+    Ok((StatusCode::OK, Json(ApiResponse::builder(item).build())))  // ← no longer compiles
+}
+```
+
+**After:** Use the existing builder functions, which already produce the correct type:
+```rust
+async fn get_item(id: Uuid) -> HandlerResponse<Item> {
+    let item = fetch(id).await?;
+    ok(item)  // ← unchanged call site; now the only valid path
+}
+```
+
+The `Ok` arm of each type alias has changed:
+
+| Type alias | Before | After |
+|---|---|---|
+| `HandlerResponse<T>` | `(StatusCode, Json<ApiResponse<T>>)` | `RfcOk<T>` |
+| `CreatedResponse<T>` | `(StatusCode, Json<ApiResponse<T>>)` | `RfcOk<T>` |
+| `CreatedAtResponse<T>` | `(StatusCode, HeaderMap, Json<ApiResponse<T>>)` | `RfcOk<T>` |
+| `EtaggedHandlerResponse<T>` | `(StatusCode, ETag, Json<ApiResponse<T>>)` | `RfcOk<T>` |
+| `HandlerListResponse<T>` | `Json<ApiResponse<PaginatedResponse<T>>>` | `RfcOk<PaginatedResponse<T>>` |
+
+`created_under` now requires `T: Serialize` (previously deferred to axum).
+
+### Added
+
+- **`RfcOk<T>`** — sealed success wrapper produced by all builder functions.
+  Exposes `.status()`, `.headers()`, and `.body_json()` for inspection.
+  Cannot be constructed outside this crate.  Gated on `rfc-types`.
+
+- **`UnconstrainedResponse`** — explicit, always-available opt-out for routes
+  whose wire format is externally mandated.  Each use must be documented at the
+  call site with a product-level justification.  See ADR platform/0020.
+
+- **`rfc-types` feature** (default: enabled) — enables the sealed `RfcOk<T>`
+  types.  Disable only during a migration window; prefer `UnconstrainedResponse`
+  for per-handler opt-outs.
+
+### Migration
+
+1. Replace `Ok((StatusCode::..., Json(...)))` in handler bodies with the
+   builder functions (`ok`, `created`, etc.).  Handlers already using the
+   builders need no changes.
+
+2. Update tests that destructured the `Ok` arm:
+   ```rust
+   // before
+   let (status, body) = ok(x).unwrap();
+   // after
+   let resp = ok(x).unwrap();
+   assert_eq!(resp.status(), StatusCode::OK);
+   assert_eq!(resp.body_json()["data"], expected);
+   ```
+
+3. Routes that bypass the envelope (e.g. OpenAI-compatible endpoints) must
+   return `UnconstrainedResponse` with an explanatory comment.
+
+4. To restore old behaviour during a migration window:
+   ```toml
+   socle = { version = "3", default-features = false, features = ["telemetry", "database", ...] }
+   ```
+
 ## [2.6.0] — 2026-04-25
 
 ### Added
