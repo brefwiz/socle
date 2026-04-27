@@ -11,3 +11,4 @@ coverage/
 *.swo
 .idea/
 .vscode/
+.ci-workflows
