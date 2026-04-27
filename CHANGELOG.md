@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.0] — 2026-04-27
+
+### Changed
+
+- **Bump `api-bones` to `=4.6.0`** (from `=4.5.0`). Pulls in the upstream additions and the no_std build fix from `api-bones 4.5.1+`. Re-exported types from `api-bones` are observable through `socle`'s public API, so this is a minor bump for `socle` consumers.
+
 ## [3.0.1] — 2026-04-26
 
 ### Added
