@@ -1,6 +1,6 @@
 [package]
 name = "socle"
-version = "3.1.0"
+version = "3.2.0"
 edition = "2024"
 authors = ["Gregoire Salingue"]
 description = "Opinionated axum service bootstrap: telemetry, database, rate limiting, and shutdown in one builder"
@@ -66,7 +66,7 @@ serde_json = "1"
 figment = { version = "0.10", features = ["env", "toml"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-api-bones = { version = "=4.6.0", features = ["axum", "uuid"] }
+api-bones = { version = "=4.7.0", features = ["axum", "uuid"] }
 
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate"], optional = true }
 

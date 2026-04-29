@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.2.0] — 2026-04-29
+
+### Changed
+
+- **Bump `api-bones` to `=4.7.0`** (from `=4.6.0`). Re-exported types from `api-bones` are observable through `socle`'s public API, so this is a minor bump for `socle` consumers.
+
 ## [3.1.0] — 2026-04-27
 
 ### Changed
