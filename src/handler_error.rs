@@ -327,6 +327,9 @@ pub fn created<T: serde::Serialize>(value: T) -> CreatedResponse<T> {
     ))
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(not(feature = "rfc-types"))]
 pub fn created<T>(value: T) -> CreatedResponse<T> {
     Ok((
@@ -356,6 +359,13 @@ pub fn created_at<T: serde::Serialize>(location: &str, value: T) -> CreatedAtRes
     Ok(RfcOk::new(axum::http::StatusCode::CREATED, headers, body))
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `location` is not a valid header value.
 #[cfg(not(feature = "rfc-types"))]
 pub fn created_at<T>(location: &str, value: T) -> CreatedAtResponse<T> {
     let mut headers = axum::http::HeaderMap::new();
@@ -389,6 +399,9 @@ pub fn created_under<T: api_bones::HasId + serde::Serialize>(
     created_at(&location, value)
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(not(feature = "rfc-types"))]
 pub fn created_under<T: api_bones::HasId>(prefix: &str, value: T) -> CreatedAtResponse<T> {
     let location = format!("{}/{}", prefix.trim_end_matches('/'), value.id());
@@ -415,6 +428,9 @@ pub fn ok<T: serde::Serialize>(value: T) -> HandlerResponse<T> {
     ))
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(not(feature = "rfc-types"))]
 pub fn ok<T>(value: T) -> HandlerResponse<T> {
     Ok((
@@ -445,6 +461,9 @@ pub fn listed<T: serde::Serialize>(
     ))
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(not(feature = "rfc-types"))]
 pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T> {
     Ok(axum::Json(api_bones::ApiResponse::builder(page).build()))
@@ -510,6 +529,9 @@ pub fn etagged<T: serde::Serialize>(
     Ok(RfcOk::new(axum::http::StatusCode::OK, headers, body))
 }
 
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(not(feature = "rfc-types"))]
 pub fn etagged<T>(etag: &api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
     Ok((
