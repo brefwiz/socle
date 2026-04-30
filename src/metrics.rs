@@ -147,10 +147,10 @@ where
 
     fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
         let method = req.method().to_string();
-        let route = req
-            .extensions()
-            .get::<MatchedPath>()
-            .map_or_else(|| normalize_path(req.uri().path()), |mp| mp.as_str().to_owned());
+        let route = req.extensions().get::<MatchedPath>().map_or_else(
+            || normalize_path(req.uri().path()),
+            |mp| mp.as_str().to_owned(),
+        );
 
         let start = Instant::now();
         let requests = self.requests.clone();

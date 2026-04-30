@@ -143,7 +143,9 @@ impl BootstrapConfig {
     ///
     /// Returns an error if required config values are missing or invalid.
     pub fn from_env() -> Result<Self> {
-        Self::figment(None::<&Path>).extract().map_err(|e| map_err(&e))
+        Self::figment(None::<&Path>)
+            .extract()
+            .map_err(|e| map_err(&e))
     }
 
     /// Load from a TOML file, with environment variables overriding any values present.
