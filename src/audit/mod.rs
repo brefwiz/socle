@@ -16,7 +16,7 @@
 //!
 //! ## ADR references
 //!
-//! - platform/0005 — NATS JetStream as event broker
+//! - platform/0005 — NATS `JetStream` as event broker
 //! - platform/0016 — handler conventions and infra-probe exemptions
 
 pub mod sinks;
@@ -51,7 +51,7 @@ pub struct AuditSinkError(pub String);
 /// Pluggable sink for audit events.
 ///
 /// Implement this trait to route [`AuditEvent`]s to any backend (tracing,
-/// NATS JetStream, a channel for testing, etc.).
+/// NATS `JetStream`, a channel for testing, etc.).
 ///
 /// Implementations must be `Send + Sync + 'static` so they can be shared
 /// across requests via `Arc`.
@@ -97,17 +97,20 @@ pub struct AuditAnnotation {
 }
 
 impl AuditAnnotation {
+    #[must_use]
     pub fn set_resource(mut self, r_type: impl Into<String>, r_id: impl Into<String>) -> Self {
         self.resource_type = Some(r_type.into());
         self.resource_id = Some(r_id.into());
         self
     }
 
+    #[must_use]
     pub fn set_action(mut self, action: impl Into<String>) -> Self {
         self.action = Some(action.into());
         self
     }
 
+    #[must_use]
     pub fn set_changes(mut self, value: serde_json::Value) -> Self {
         self.changes = Some(value);
         self
@@ -124,6 +127,11 @@ impl AuditAnnotation {
 pub struct AuditAnnotationSlot(Arc<Mutex<Option<AuditAnnotation>>>);
 
 impl AuditAnnotationSlot {
+    /// Attach domain-level enrichment to this request's audit record.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned (should never happen in practice).
     pub fn annotate(&self, annotation: AuditAnnotation) {
         *self.0.lock().expect("audit annotation mutex poisoned") = Some(annotation);
     }
@@ -168,25 +176,30 @@ impl Default for AuditFilter {
 }
 
 impl AuditFilter {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn include_method(mut self, method: axum::http::Method) -> Self {
         self.included_methods.push(method);
         self
     }
 
+    #[must_use]
     pub fn exclude_path_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.excluded_path_prefixes.push(prefix.into());
         self
     }
 
+    #[must_use]
     pub fn include_path(mut self, path: impl Into<String>) -> Self {
         self.additional_included_paths.push(path.into());
         self
     }
 
+    #[must_use]
     pub fn matches(&self, method: &axum::http::Method, path: &str) -> bool {
         if self
             .additional_included_paths
@@ -225,7 +238,7 @@ impl AuditFilter {
 ///
 /// ## ADR references
 ///
-/// - platform/0005 — NATS JetStream as event broker
+/// - platform/0005 — NATS `JetStream` as event broker
 /// - platform/0016 — handler conventions and infra-probe exemptions
 #[derive(Clone)]
 pub struct AuditLayer {
@@ -241,6 +254,7 @@ impl AuditLayer {
         }
     }
 
+    #[must_use]
     pub fn with_filter(mut self, filter: AuditFilter) -> Self {
         self.filter = filter;
         self
@@ -302,8 +316,7 @@ where
         let path_template = req
             .extensions()
             .get::<MatchedPath>()
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_else(|| req.uri().path().to_owned());
+            .map_or_else(|| req.uri().path().to_owned(), |m| m.as_str().to_owned());
 
         let request_id = req
             .extensions()
@@ -320,7 +333,7 @@ where
         let (principal_id, org_path) = req
             .extensions()
             .get::<api_bones::org_context::OrganizationContext>()
-            .map(|ctx| {
+            .map_or((None, None), |ctx| {
                 let pid = ctx.principal.as_str().to_owned();
                 let path = ctx
                     .org_path
@@ -329,8 +342,7 @@ where
                     .collect::<Vec<_>>()
                     .join("/");
                 (Some(pid), Some(path))
-            })
-            .unwrap_or((None, None));
+            });
 
         let sink = Arc::clone(&self.sink);
         let fut = self.inner.call(req);
@@ -338,10 +350,13 @@ where
         Box::pin(async move {
             let response = fut.await?;
             let status = response.status().as_u16();
-            let duration_ms = Utc::now()
-                .signed_duration_since(started_at)
-                .num_milliseconds()
-                .max(0) as u64;
+            let duration_ms = u64::try_from(
+                Utc::now()
+                    .signed_duration_since(started_at)
+                    .num_milliseconds()
+                    .max(0),
+            )
+            .unwrap_or(0);
 
             let annotation = slot.take();
 

@@ -9,7 +9,7 @@ tokio::task_local! {
     pub(crate) static CURRENT_REQUEST_ID: String;
 }
 
-/// [`MakeRequestId`] implementation that generates sortable UUIDv7 identifiers
+/// [`MakeRequestId`] implementation that generates sortable `UUIDv7` identifiers
 /// and accepts inbound `x-request-id` / `x-correlation-id` headers.
 #[derive(Clone, Default)]
 pub struct MakeRequestUuidV7;

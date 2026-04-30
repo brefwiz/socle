@@ -179,7 +179,7 @@ where
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let key = self.extractor.extract(&req);
         match self.limiter.check_key(&key) {
-            Ok(_) => {
+            Ok(()) => {
                 let mut inner = self.inner.clone();
                 std::mem::swap(&mut inner, &mut self.inner);
                 Box::pin(async move { inner.call(req).await })

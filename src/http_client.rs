@@ -178,6 +178,9 @@ impl ClientBuilder {
         self
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the underlying reqwest client fails to build.
     pub fn build(self) -> Result<Client, reqwest::Error> {
         let reqwest_client = self.inner.build()?;
         let mut builder = MiddlewareClientBuilder::new(reqwest_client)
@@ -231,12 +234,14 @@ impl Client {
         self.inner.request(method, url)
     }
 
+    #[must_use]
     pub fn inner(&self) -> &ClientWithMiddleware {
         &self.inner
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_statements)]
 mod tests {
     use super::*;
     use axum::{Router, extract::Request as AxumRequest, routing::get};

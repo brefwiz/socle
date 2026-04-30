@@ -1,6 +1,6 @@
 //! Telemetry port — initialisation and shutdown abstraction.
 //!
-//! Implement [`TelemetryProvider`] to plug in a full OTel SDK (e.g.
+//! Implement [`TelemetryProvider`] to plug in a full `OTel` SDK (e.g.
 //! `otel-bootstrap`) without forking [`crate::ServiceBootstrap::serve`].
 //!
 //! The built-in provider (`BasicTelemetryProvider`) initialises
@@ -41,6 +41,10 @@ use std::pin::Pin;
 pub trait TelemetryProvider: Send + Sync + 'static {
     /// Initialise telemetry for `service_name`. Called once before the HTTP
     /// server starts. Return an error to abort startup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if telemetry initialisation fails, which will abort startup.
     fn init(&self, service_name: &str) -> crate::error::Result<()>;
 
     /// Async drain to run after the HTTP server stops (flush spans, metrics,

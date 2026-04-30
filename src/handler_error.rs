@@ -21,7 +21,7 @@
 //!
 //! ## Opt-out
 //!
-//! For routes where the wire format is externally mandated (e.g. OpenAI-
+//! For routes where the wire format is externally mandated (e.g. `OpenAI`-
 //! compatible data-plane endpoints), return [`UnconstrainedResponse`] and
 //! document the product-level reason at the call site.
 
@@ -43,12 +43,14 @@ impl HandlerError {
     }
 
     /// Add a request ID to the error (serialized as `instance` field in RFC 9457).
+    #[must_use]
     pub fn with_request_id(mut self, id: uuid::Uuid) -> Self {
         self.0 = self.0.with_request_id(id);
         self
     }
 
     /// Add validation errors to the error response.
+    #[must_use]
     pub fn with_errors(mut self, errors: Vec<ValidationError>) -> Self {
         self.0 = self.0.with_errors(errors);
         self
@@ -187,27 +189,32 @@ mod rfc_ok {
         }
 
         /// HTTP status code of this response.
+        #[must_use]
         pub fn status(&self) -> StatusCode {
             self.status
         }
 
         /// Response headers (e.g. `Location`, `ETag`).
+        #[must_use]
         pub fn headers(&self) -> &HeaderMap {
             &self.headers
         }
 
         /// Parse the serialized body as a JSON value.
         ///
-        /// Useful for assertions in unit tests. Panics if the body is not
-        /// valid JSON (which cannot happen for responses built by this crate).
+        /// Useful for assertions in unit tests.
+        ///
+        /// # Panics
+        ///
+        /// Panics if the body is not valid JSON (which cannot happen for responses built by this crate).
+        #[must_use]
         pub fn body_json(&self) -> serde_json::Value {
             serde_json::from_slice(&self.body).expect("body is always valid JSON")
         }
     }
 
-    // T is phantom-only (body is Vec<u8>), so RfcOk<T> is Send+Sync for all T.
-    unsafe impl<T> Send for RfcOk<T> {}
-    unsafe impl<T> Sync for RfcOk<T> {}
+    // T is phantom-only (body is Vec<u8>) and PhantomData<fn() -> T> is always
+    // Send + Sync, so no manual impls are required.
 
     impl<T> IntoResponse for RfcOk<T> {
         fn into_response(self) -> Response {
@@ -301,6 +308,14 @@ pub use type_aliases::{
 // ── Builder functions ─────────────────────────────────────────────────────────
 
 /// Build the success response for a [`CreatedResponse`] handler (201 Created).
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `T` fails to serialize (not possible for valid `serde::Serialize` impls).
 #[cfg(feature = "rfc-types")]
 pub fn created<T: serde::Serialize>(value: T) -> CreatedResponse<T> {
     let body = serde_json::to_vec(&api_bones::ApiResponse::builder(value).build())
@@ -321,6 +336,14 @@ pub fn created<T>(value: T) -> CreatedResponse<T> {
 }
 
 /// Build the success response for a [`CreatedAtResponse`] handler (201 Created + `Location`).
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `location` is not a valid header value, or if `T` fails to serialize.
 #[cfg(feature = "rfc-types")]
 pub fn created_at<T: serde::Serialize>(location: &str, value: T) -> CreatedAtResponse<T> {
     let mut headers = axum::http::HeaderMap::new();
@@ -353,6 +376,10 @@ pub fn created_at<T>(location: &str, value: T) -> CreatedAtResponse<T> {
 /// The prefix is typically the route path (e.g. `"/v1/items"`); the id comes
 /// from the value's [`HasId`](api_bones::HasId) impl.  Trailing slashes on
 /// `prefix` are trimmed.
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 #[cfg(feature = "rfc-types")]
 pub fn created_under<T: api_bones::HasId + serde::Serialize>(
     prefix: &str,
@@ -369,6 +396,14 @@ pub fn created_under<T: api_bones::HasId>(prefix: &str, value: T) -> CreatedAtRe
 }
 
 /// Build the success response for a [`HandlerResponse`] handler (200 OK).
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `T` fails to serialize (not possible for valid `serde::Serialize` impls).
 #[cfg(feature = "rfc-types")]
 pub fn ok<T: serde::Serialize>(value: T) -> HandlerResponse<T> {
     let body = serde_json::to_vec(&api_bones::ApiResponse::builder(value).build())
@@ -389,6 +424,14 @@ pub fn ok<T>(value: T) -> HandlerResponse<T> {
 }
 
 /// Build the success response for a [`HandlerListResponse`] handler.
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `T` fails to serialize (not possible for valid `serde::Serialize` impls).
 #[cfg(feature = "rfc-types")]
 pub fn listed<T: serde::Serialize>(
     page: api_bones::PaginatedResponse<T>,
@@ -408,6 +451,10 @@ pub fn listed<T>(page: api_bones::PaginatedResponse<T>) -> HandlerListResponse<T
 }
 
 /// Paginate a fully-loaded `Vec<T>`, map each item to `U`, and return a [`HandlerListResponse`].
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
 ///
 /// Combines the common client-side pagination boilerplate (skip/take + total) into one call:
 ///
@@ -431,17 +478,25 @@ where
     let total = items.len() as u64;
     let page: Vec<U> = items
         .into_iter()
-        .skip(params.offset.unwrap_or(0) as usize)
-        .take(params.limit.unwrap_or(20) as usize)
+        .skip(usize::try_from(params.offset.unwrap_or(0)).unwrap_or(usize::MAX))
+        .take(usize::try_from(params.limit.unwrap_or(20)).unwrap_or(usize::MAX))
         .map(Into::into)
         .collect();
     listed(api_bones::PaginatedResponse::new(page, total, params))
 }
 
 /// Build the success response for an [`EtaggedHandlerResponse`] handler (200 OK + `ETag`).
+///
+/// # Errors
+///
+/// Never returns `Err`; the `Result` wrapper exists for `?`-ergonomics in handlers.
+///
+/// # Panics
+///
+/// Panics if `T` fails to serialize (not possible for valid `serde::Serialize` impls).
 #[cfg(feature = "rfc-types")]
 pub fn etagged<T: serde::Serialize>(
-    etag: api_bones::etag::ETag,
+    etag: &api_bones::etag::ETag,
     value: T,
 ) -> EtaggedHandlerResponse<T> {
     let mut headers = axum::http::HeaderMap::new();
@@ -456,10 +511,10 @@ pub fn etagged<T: serde::Serialize>(
 }
 
 #[cfg(not(feature = "rfc-types"))]
-pub fn etagged<T>(etag: api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
+pub fn etagged<T>(etag: &api_bones::etag::ETag, value: T) -> EtaggedHandlerResponse<T> {
     Ok((
         axum::http::StatusCode::OK,
-        etag,
+        etag.clone(),
         axum::Json(api_bones::ApiResponse::builder(value).build()),
     ))
 }
@@ -467,6 +522,7 @@ pub fn etagged<T>(etag: api_bones::etag::ETag, value: T) -> EtaggedHandlerRespon
 // ── Panic handler ─────────────────────────────────────────────────────────────
 
 /// Build a Problem+JSON 500 response from a panic payload. Used in catch-panic layer.
+#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn panic_handler(err: Box<dyn std::any::Any + Send + 'static>) -> Response {
     let detail = if let Some(s) = err.downcast_ref::<String>() {
         s.as_str()
@@ -558,7 +614,7 @@ mod tests {
         fn etagged_builds_200_with_etag_and_envelope() {
             use api_bones::etag::ETag;
             let etag = ETag::strong("abc123");
-            let resp = etagged(etag.clone(), 99u32).unwrap();
+            let resp = etagged(&etag, 99u32).unwrap();
             assert_eq!(resp.status(), axum::http::StatusCode::OK);
             assert_eq!(
                 resp.headers()

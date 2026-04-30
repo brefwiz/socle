@@ -170,6 +170,10 @@ impl ServiceBootstrap {
     }
 
     /// Build from a [`BootstrapConfig`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the config fails validation or CORS config is invalid.
     pub fn from_config(service_name: impl Into<Arc<str>>, cfg: BootstrapConfig) -> Result<Self> {
         let cfg = cfg.validate()?;
         let mut b = Self::new(service_name)
@@ -182,7 +186,7 @@ impl ServiceBootstrap {
         b.bind_addr = Some(cfg.bind_addr);
 
         if cfg.cors != CorsConfig::default() {
-            b = b.with_cors_config(cfg.cors)?;
+            b = b.with_cors_config(&cfg.cors)?;
         }
 
         #[cfg(feature = "telemetry")]
@@ -207,6 +211,10 @@ impl ServiceBootstrap {
     }
 
     /// Run using the bind address loaded from [`BootstrapConfig`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bind address is missing or the server fails to start.
     pub async fn run(self) -> Result<()> {
         let addr = self.bind_addr.clone().ok_or_else(|| {
             Error::Config("run() requires from_config(...) to set bind_addr".into())
@@ -288,7 +296,7 @@ impl ServiceBootstrap {
     /// Override the telemetry initialisation function.
     ///
     /// When set, called instead of the built-in `tracing_subscriber` setup.
-    /// Use this to wire in a full OTel SDK (e.g. `otel-bootstrap`) from a
+    /// Use this to wire in a full `OTel` SDK (e.g. `otel-bootstrap`) from a
     /// wrapper crate without forking `serve()`.
     ///
     /// The callback receives the service name and must return `Ok(())` on
@@ -319,7 +327,7 @@ impl ServiceBootstrap {
     /// Takes priority over [`with_telemetry_init`] and
     /// [`ServiceBootstrap::with_telemetry`] when all are called. Implies [`ServiceBootstrap::with_telemetry`].
     ///
-    /// Use this to wire in `otel-bootstrap` or any other OTel SDK from a
+    /// Use this to wire in `otel-bootstrap` or any other `OTel` SDK from a
     /// wrapper crate:
     ///
     /// ```rust,no_run
@@ -500,8 +508,12 @@ impl ServiceBootstrap {
     }
 
     /// Configure CORS from a structured [`CorsConfig`].
-    pub fn with_cors_config(mut self, cfg: CorsConfig) -> Result<Self> {
-        self.cors = Some(crate::adapters::cors::build_cors_layer(&cfg)?);
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the CORS config contains invalid values.
+    pub fn with_cors_config(mut self, cfg: &CorsConfig) -> Result<Self> {
+        self.cors = Some(crate::adapters::cors::build_cors_layer(cfg)?);
         Ok(self)
     }
 
@@ -539,7 +551,7 @@ impl ServiceBootstrap {
 
     // ── OpenAPI ────────────────────────────────────────────────────────────────
 
-    /// Mount an OpenAPI spec and Swagger UI.
+    /// Mount an `OpenAPI` spec and Swagger UI.
     #[cfg(feature = "openapi")]
     pub fn with_openapi(mut self, api: utoipa::openapi::OpenApi) -> Self {
         self.openapi = Some(api);
@@ -572,7 +584,7 @@ mod tests {
             .with_body_limit(1024)
             .with_shutdown_timeout(std::time::Duration::from_secs(1))
             .with_cors(CorsLayer::permissive())
-            .with_cors_config(CorsConfig {
+            .with_cors_config(&CorsConfig {
                 allowed_origins: vec!["https://app.example.com".into()],
                 allow_credentials: true,
                 max_age_secs: Some(600),

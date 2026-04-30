@@ -174,11 +174,11 @@ mod tests {
 
     #[test]
     fn error_display_covers_all_variants() {
-        assert!(Error::Config("x".into()).to_string().contains("x"));
-        assert!(Error::Telemetry("x".into()).to_string().contains("x"));
-        assert!(Error::Database("x".into()).to_string().contains("x"));
-        assert!(Error::Bind("x".into()).to_string().contains("x"));
-        assert!(Error::Serve("x".into()).to_string().contains("x"));
+        assert!(Error::Config("x".into()).to_string().contains('x'));
+        assert!(Error::Telemetry("x".into()).to_string().contains('x'));
+        assert!(Error::Database("x".into()).to_string().contains('x'));
+        assert!(Error::Bind("x".into()).to_string().contains('x'));
+        assert!(Error::Serve("x".into()).to_string().contains('x'));
     }
 
     #[cfg(feature = "telemetry")]

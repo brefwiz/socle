@@ -12,6 +12,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
+use api_bones::audit::Principal;
 use api_bones::error::ApiError;
 use api_bones::org_context::OrganizationContext;
 use api_bones::org_id::{OrgId, OrgPath};
@@ -81,12 +82,10 @@ impl<S: Send + Sync> FromRequestParts<S> for OrgContextExtractor {
                 .get("x-org-path")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<OrgPath>().ok())
-                .map(|p| p.into_inner())
-                .unwrap_or_else(|| vec![org_id]);
+                .map_or_else(|| vec![org_id], OrgPath::into_inner);
 
             let request_id = extract_request_id_from_parts(parts);
 
-            use api_bones::audit::Principal;
             let ctx =
                 OrganizationContext::new(org_id, Principal::system("unauthenticated"), request_id)
                     .with_org_path(org_path);

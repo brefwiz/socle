@@ -114,7 +114,7 @@ async fn span_capture_records_closed_span() {
     use socle::testing::trace::init_capture_tracing;
 
     let exporter = init_capture_tracing();
-    exporter.drain(); // clear any spans from prior tests
+    let _ = exporter.drain(); // clear any spans from prior tests
 
     tracing::info_span!("test_op").in_scope(|| {});
 
@@ -127,7 +127,7 @@ async fn capture_exporter_drain_empties_buffer() {
     use socle::testing::trace::init_capture_tracing;
 
     let exporter = init_capture_tracing();
-    exporter.drain();
+    let _ = exporter.drain();
 
     tracing::info_span!("drain_op").in_scope(|| {});
 

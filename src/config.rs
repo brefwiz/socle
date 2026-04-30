@@ -138,15 +138,23 @@ impl Default for BootstrapConfig {
 
 impl BootstrapConfig {
     /// Load from environment variables only.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required config values are missing or invalid.
     pub fn from_env() -> Result<Self> {
-        Self::figment(None::<&Path>).extract().map_err(map_err)
+        Self::figment(None::<&Path>).extract().map_err(|e| map_err(&e))
     }
 
     /// Load from a TOML file, with environment variables overriding any values present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be parsed or required values are invalid.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         Self::figment(Some(path.as_ref()))
             .extract()
-            .map_err(map_err)
+            .map_err(|e| map_err(&e))
     }
 
     fn figment(path: Option<&Path>) -> Figment {
@@ -168,6 +176,10 @@ impl BootstrapConfig {
     }
 
     /// Validate cross-field invariants. Returns the config back on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any config field fails validation.
     pub fn validate(self) -> Result<Self> {
         if let RateLimitKind::Memory { limit, window_secs } = self.rate_limit.kind {
             if limit == 0 {
@@ -181,13 +193,15 @@ impl BootstrapConfig {
     }
 }
 
-fn map_err(e: figment::Error) -> Error {
+fn map_err(e: &figment::Error) -> Error {
     Error::Config(format!("config: {e}"))
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
     use std::sync::Mutex;
 
     // Env-var tests must run serially to avoid cross-test pollution.
@@ -244,7 +258,6 @@ mod tests {
     #[test]
     fn load_reads_toml_file() {
         let _g = ENV_LOCK.lock().unwrap();
-        use std::io::Write as _;
         let mut f = tempfile::NamedTempFile::new().unwrap();
         writeln!(f, r#"bind_addr = "0.0.0.0:1234""#).unwrap();
         let cfg = BootstrapConfig::load(f.path()).unwrap();
@@ -254,7 +267,6 @@ mod tests {
     #[test]
     fn load_env_overrides_toml() {
         let _g = ENV_LOCK.lock().unwrap();
-        use std::io::Write as _;
         let mut f = tempfile::NamedTempFile::new().unwrap();
         writeln!(f, r#"bind_addr = "0.0.0.0:1234""#).unwrap();
         // SAFETY: ENV_LOCK serialises all env-var mutations in this module.

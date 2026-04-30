@@ -14,6 +14,7 @@ pub struct ChannelAuditSink {
 }
 
 impl ChannelAuditSink {
+    #[must_use]
     pub fn new(tx: UnboundedSender<AuditEvent>) -> Self {
         Self { tx }
     }
