@@ -1,4 +1,4 @@
-//! Service with PostgreSQL: pool construction, migrations, and pool access in handlers.
+//! Service with `PostgreSQL`: pool construction, migrations, and pool access in handlers.
 //!
 //! Requires `DATABASE_URL` in the environment (or a `.env` file).
 

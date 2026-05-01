@@ -145,3 +145,11 @@ required-features = ["test-util"]
 name = "audit_sinks"
 path = "tests/audit_sinks.rs"
 required-features = ["test-util"]
+
+[lints.rust]
+warnings    = "deny"
+unsafe_code = "deny"
+
+[lints.clippy]
+all      = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

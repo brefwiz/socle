@@ -4,6 +4,10 @@
 use std::future::Future;
 use std::net::SocketAddr;
 
+use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::compression::CompressionLayer;
+use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::bootstrap::builder::{ServiceBootstrap, ShutdownHook};
@@ -13,6 +17,11 @@ use crate::error::{Error, Result};
 impl ServiceBootstrap {
     /// Run the service. Initialises every enabled integration in dependency
     /// order, binds the listener, serves until SIGINT/SIGTERM, then drains.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the address is invalid, binding fails, or any
+    /// integration fails to initialise.
     pub async fn serve(self, addr: impl Into<String>) -> Result<()> {
         let addr: SocketAddr = addr
             .into()
@@ -43,6 +52,12 @@ impl ServiceBootstrap {
     ///     .unwrap()
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any integration fails to initialise or the server
+    /// encounters a fatal error.
+    #[allow(clippy::too_many_lines)]
     pub async fn serve_with_shutdown(
         self,
         listener: tokio::net::TcpListener,
@@ -114,7 +129,7 @@ impl ServiceBootstrap {
             } else {
                 match telemetry_init {
                     Some(init_fn) => {
-                        init_fn(&service_name).map_err(|e| Error::Telemetry(e.to_string()))?
+                        init_fn(&service_name).map_err(|e| Error::Telemetry(e.to_string()))?;
                     }
                     None => crate::adapters::observability::telemetry::init_basic_tracing(),
                 }
@@ -244,11 +259,6 @@ impl ServiceBootstrap {
         ));
 
         // Cross-cutting tower-http layers.
-        use tower_http::catch_panic::CatchPanicLayer;
-        use tower_http::compression::CompressionLayer;
-        use tower_http::limit::RequestBodyLimitLayer;
-        use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
-
         let request_id_header = axum::http::HeaderName::from_static("x-request-id");
 
         let trace_layer =
@@ -295,13 +305,14 @@ impl ServiceBootstrap {
 async fn run_shutdown_hooks(hooks: Vec<ShutdownHook>, _default_timeout: std::time::Duration) {
     for hook in hooks.into_iter().rev() {
         tracing::info!(hook = %hook.name, "socle: running shutdown hook");
-        match tokio::time::timeout(hook.timeout, (hook.hook)()).await {
-            Ok(()) => tracing::info!(hook = %hook.name, "socle: shutdown hook completed"),
-            Err(_) => tracing::error!(
+        if let Ok(()) = tokio::time::timeout(hook.timeout, (hook.hook)()).await {
+            tracing::info!(hook = %hook.name, "socle: shutdown hook completed");
+        } else {
+            tracing::error!(
                 hook = %hook.name,
                 timeout_secs = hook.timeout.as_secs(),
                 "socle: shutdown hook timed out"
-            ),
+            );
         }
     }
 }
@@ -320,7 +331,7 @@ pub(crate) async fn shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
     tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        () = ctrl_c => {},
+        () = terminate => {},
     }
 }

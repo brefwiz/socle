@@ -27,6 +27,10 @@ pub struct EphemeralPostgres {
 
 impl EphemeralPostgres {
     /// Pull (if needed) and start a Postgres 16 container on a random host port.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the container fails to start or the mapped port cannot be retrieved.
     pub async fn start() -> Self {
         use testcontainers::runners::AsyncRunner;
 
@@ -49,11 +53,16 @@ impl EphemeralPostgres {
     }
 
     /// Return the Postgres connection URL for this container.
+    #[must_use]
     pub fn connection_url(&self) -> &str {
         &self.connection_url
     }
 
     /// Open a `sqlx` connection pool to this container.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection cannot be established.
     pub async fn pool(&self) -> PgPool {
         PgPool::connect(&self.connection_url)
             .await
@@ -66,7 +75,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires Docker"]
     async fn start_pool_select_one() {
         let pg = EphemeralPostgres::start().await;
         let pool = pg.pool().await;

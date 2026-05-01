@@ -38,7 +38,7 @@ pub async fn enrich_error_response(req: Request<Body>, next: Next) -> Response {
     for (name, value) in parts
         .headers
         .into_iter()
-        .flat_map(|(n, v)| n.map(|n| (n, v)))
+        .filter_map(|(n, v)| n.map(|n| (n, v)))
     {
         if name != header::CONTENT_TYPE && name != header::CONTENT_LENGTH {
             new_resp.headers_mut().insert(name, value);

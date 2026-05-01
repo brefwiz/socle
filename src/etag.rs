@@ -1,4 +1,4 @@
-//! ETag / conditional-request helpers.
+//! `ETag` / conditional-request helpers.
 
 pub use api_bones::etag::{ETag, IfMatch, IfNoneMatch, ParseETagError};
 
@@ -8,12 +8,18 @@ use chrono::{DateTime, Utc};
 use crate::ApiError;
 
 /// Derive a weak [`ETag`] from an `updated_at` timestamp.
+#[must_use]
 pub fn etag_from_updated_at(updated_at: DateTime<Utc>) -> ETag {
     let millis = updated_at.timestamp_millis();
     ETag::weak(format!("{millis:x}"))
 }
 
 /// Validate the `If-Match` request header against a current [`ETag`].
+///
+/// # Errors
+///
+/// Returns an [`ApiError`] (428) if the header is missing, (400) if malformed,
+/// or (412) if no tag matches.
 pub fn check_if_match(headers: &HeaderMap, current_etag: &ETag) -> Result<(), ApiError> {
     let raw = match headers.get(axum::http::header::IF_MATCH) {
         None => {
@@ -22,7 +28,7 @@ pub fn check_if_match(headers: &HeaderMap, current_etag: &ETag) -> Result<(), Ap
                 "If-Match header is required",
             );
             err.status = 428;
-            err.title = "Precondition Required".to_owned();
+            "Precondition Required".clone_into(&mut err.title);
             return Err(err);
         }
         Some(v) => v
@@ -47,7 +53,7 @@ pub fn check_if_match(headers: &HeaderMap, current_etag: &ETag) -> Result<(), Ap
             "ETag does not match; the resource has been modified",
         );
         err.status = 412;
-        err.title = "Precondition Failed".to_owned();
+        "Precondition Failed".clone_into(&mut err.title);
         Err(err)
     }
 }

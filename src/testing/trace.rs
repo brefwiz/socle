@@ -41,11 +41,21 @@ pub struct CaptureExporter {
 
 impl CaptureExporter {
     /// Return all captured spans.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    #[must_use]
     pub fn spans(&self) -> Vec<SpanRecord> {
         self.spans.lock().unwrap().clone()
     }
 
     /// Drain and return all captured spans, leaving the buffer empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    #[must_use]
     pub fn drain(&self) -> Vec<SpanRecord> {
         std::mem::take(&mut self.spans.lock().unwrap())
     }
@@ -65,6 +75,18 @@ struct CaptureLayer {
     exporter: CaptureExporter,
 }
 
+struct Visitor<'a>(&'a mut Vec<(String, String)>);
+
+impl tracing::field::Visit for Visitor<'_> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.push((field.name().to_owned(), format!("{value:?}")));
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.push((field.name().to_owned(), value.to_owned()));
+    }
+}
+
 impl<S> Layer<S> for CaptureLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
@@ -75,16 +97,6 @@ where
             name: span.name().to_owned(),
             attributes: vec![],
         };
-
-        struct Visitor<'a>(&'a mut Vec<(String, String)>);
-        impl tracing::field::Visit for Visitor<'_> {
-            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-                self.0.push((field.name().to_owned(), format!("{value:?}")));
-            }
-            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-                self.0.push((field.name().to_owned(), value.to_owned()));
-            }
-        }
         attrs.record(&mut Visitor(&mut record.attributes));
         span.extensions_mut().insert(record);
     }

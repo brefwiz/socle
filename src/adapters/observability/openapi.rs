@@ -1,4 +1,4 @@
-//! OpenAPI adapter — merge health paths and mount Swagger UI.
+//! `OpenAPI` adapter — merge health paths and mount Swagger UI.
 
 use axum::Router;
 
@@ -67,7 +67,7 @@ pub(crate) fn merge_health_paths(
         .paths
         .entry(live_path)
         .and_modify(|item| {
-            item.merge_operations(PathItem::new(HttpMethod::Get, liveness_op.clone()))
+            item.merge_operations(PathItem::new(HttpMethod::Get, liveness_op.clone()));
         })
         .or_insert_with(|| PathItem::new(HttpMethod::Get, liveness_op));
 
@@ -75,7 +75,7 @@ pub(crate) fn merge_health_paths(
         .paths
         .entry(ready_path)
         .and_modify(|item| {
-            item.merge_operations(PathItem::new(HttpMethod::Get, readiness_op.clone()))
+            item.merge_operations(PathItem::new(HttpMethod::Get, readiness_op.clone()));
         })
         .or_insert_with(|| PathItem::new(HttpMethod::Get, readiness_op));
 

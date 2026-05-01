@@ -73,7 +73,7 @@ fn worst_of(
     a: api_bones::health::HealthStatus,
     b: api_bones::health::HealthStatus,
 ) -> api_bones::health::HealthStatus {
-    use api_bones::health::HealthStatus::*;
+    use api_bones::health::HealthStatus::{Fail, Pass, Warn};
     match (a, b) {
         (Fail, _) | (_, Fail) => Fail,
         (Warn, _) | (_, Warn) => Warn,

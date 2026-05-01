@@ -44,6 +44,10 @@ mod test_client {
         }
 
         /// Perform a GET request against `path`.
+        ///
+        /// # Panics
+        ///
+        /// Panics if the HTTP request fails.
         pub async fn get(&self, path: &str) -> reqwest::Response {
             self.client
                 .get(format!("{}{path}", self.base_url))
@@ -53,6 +57,10 @@ mod test_client {
         }
 
         /// Perform a POST request against `path` with a JSON body.
+        ///
+        /// # Panics
+        ///
+        /// Panics if the HTTP request fails.
         pub async fn post<T: serde::Serialize>(&self, path: &str, body: &T) -> reqwest::Response {
             self.client
                 .post(format!("{}{path}", self.base_url))

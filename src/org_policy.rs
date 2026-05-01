@@ -11,11 +11,19 @@ use api_bones::org_id::OrgId;
 pub trait OrgPolicy: Send + Sync {
     /// Return `Ok(())` if `caller` is allowed to access `target`, or an
     /// [`ApiError`] describing the denial.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ApiError`] if access is denied.
     fn allows(&self, caller: &OrganizationContext, target: &OrgId) -> Result<(), ApiError>;
 
     /// Convenience wrapper — returns a `403 Forbidden` with
     /// `detail: "cross-org access denied"` on rejection, preserving
     /// `caller.request_id` as the RFC 9457 `instance`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `403 Forbidden` [`ApiError`] if access is denied.
     fn check_target(&self, caller: &OrganizationContext, target: &OrgId) -> Result<(), ApiError> {
         self.allows(caller, target).map_err(|_| {
             ApiError::new(ErrorCode::Forbidden, "cross-org access denied")

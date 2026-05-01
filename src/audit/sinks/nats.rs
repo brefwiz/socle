@@ -14,7 +14,7 @@ pub fn audit_dropped_total() -> u64 {
     AUDIT_DROPPED_TOTAL.load(Ordering::Relaxed)
 }
 
-/// Publishes audit events to NATS JetStream.
+/// Publishes audit events to NATS `JetStream`.
 ///
 /// Subject pattern: `audit.{service_name}.{resource_type|"unknown"}`.
 ///
@@ -41,7 +41,7 @@ impl NatsJetStreamAuditSink {
                     .as_deref()
                     .unwrap_or("unknown")
                     .to_owned();
-                let subject = format!("audit.{}.{}", service_name, resource_type);
+                let subject = format!("audit.{service_name}.{resource_type}");
                 match serde_json::to_vec(&event) {
                     Ok(payload) => {
                         if let Err(e) = context.publish(subject, payload.into()).await {

@@ -38,11 +38,13 @@ pub struct TestApp {
 
 impl TestApp {
     /// Create a [`TestAppBuilder`].
+    #[must_use]
     pub fn builder() -> TestAppBuilder {
         TestAppBuilder::default()
     }
 
     /// Return a [`TestClient`] pre-configured with this server's base URL.
+    #[must_use]
     pub fn client(&self) -> TestClient {
         TestClient::new(format!("http://{}", self.addr))
     }
@@ -77,12 +79,17 @@ pub struct TestAppBuilder {
 
 impl TestAppBuilder {
     /// Set the Axum router the test server will serve.
+    #[must_use]
     pub fn router(mut self, router: Router) -> Self {
         self.router = Some(router);
         self
     }
 
     /// Bind to an ephemeral port and start the server.
+    ///
+    /// # Panics
+    ///
+    /// Panics if binding the ephemeral port fails or the server encounters an error.
     pub async fn build(self) -> TestApp {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await

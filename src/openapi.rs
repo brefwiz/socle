@@ -76,7 +76,7 @@ pub fn merge_health_paths(doc: &mut OpenApi, health_path: &str) {
         .paths
         .entry(live_path)
         .and_modify(|item| {
-            item.merge_operations(PathItem::new(HttpMethod::Get, liveness_op.clone()))
+            item.merge_operations(PathItem::new(HttpMethod::Get, liveness_op.clone()));
         })
         .or_insert_with(|| PathItem::new(HttpMethod::Get, liveness_op));
 
@@ -84,7 +84,7 @@ pub fn merge_health_paths(doc: &mut OpenApi, health_path: &str) {
         .paths
         .entry(ready_path)
         .and_modify(|item| {
-            item.merge_operations(PathItem::new(HttpMethod::Get, readiness_op.clone()))
+            item.merge_operations(PathItem::new(HttpMethod::Get, readiness_op.clone()));
         })
         .or_insert_with(|| PathItem::new(HttpMethod::Get, readiness_op));
 
@@ -101,12 +101,16 @@ pub fn merge_health_paths(doc: &mut OpenApi, health_path: &str) {
 }
 
 /// Rewrite every `nullable: true` array schema node in `value` for progenitor
-/// compatibility (OpenAPI 3.1 → 3.0 style).
+/// compatibility (`OpenAPI` 3.1 → 3.0 style).
 pub fn rewrite_nullable_for_progenitor(value: &mut serde_json::Value) {
     rewrite_nullable_recursive(value);
 }
 
-/// Serialise `doc` as a pretty-printed OpenAPI **3.0.3** JSON string.
+/// Serialise `doc` as a pretty-printed `OpenAPI` **3.0.3** JSON string.
+///
+/// # Errors
+///
+/// Returns a serialization error if the document cannot be serialized to JSON.
 pub fn to_3_0_pretty_json(doc: &OpenApi) -> serde_json::Result<String> {
     let json = serde_json::to_string_pretty(doc)?;
     let mut val: serde_json::Value = serde_json::from_str(&json)?;
@@ -260,7 +264,7 @@ fn coerce_boolean_and_2020_schemas(val: &mut serde_json::Value) {
                     if b {
                         map.insert(
                             key.to_string(),
-                            serde_json::Value::Object(Default::default()),
+                            serde_json::Value::Object(serde_json::Map::default()),
                         );
                     } else {
                         map.remove(*key);

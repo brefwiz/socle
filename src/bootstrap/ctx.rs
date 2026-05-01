@@ -20,15 +20,19 @@ pub struct BootstrapCtx {
 
 impl BootstrapCtx {
     /// The service name passed to [`crate::bootstrap::ServiceBootstrap::new`].
+    #[must_use]
     pub fn service_name(&self) -> &str {
         &self.service_name
     }
 
     /// The database pool, if `with_database` or `with_db_pool` was called.
     ///
+    /// # Panics
+    ///
     /// Panics if called without either — that's intentional: a missing pool is
     /// a wiring bug, not a runtime condition.
     #[cfg(feature = "database")]
+    #[must_use]
     pub fn db(&self) -> &sqlx::PgPool {
         self.db
             .as_ref()
@@ -46,6 +50,7 @@ impl BootstrapCtx {
     /// Retrieve a value from the extension map by type.
     ///
     /// Returns `None` if no value of type `T` was inserted.
+    #[must_use]
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.extensions
             .get(&TypeId::of::<T>())

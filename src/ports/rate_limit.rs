@@ -1,7 +1,7 @@
 //! Rate-limit port — extension point for pluggable rate-limit backends.
 //!
 //! The built-in backend (`RateLimitBackend`) uses `governor` (GCRA, in-process
-//! DashMap store) and is wired in when `ratelimit-memory` is enabled.
+//! `DashMap` store) and is wired in when `ratelimit-memory` is enabled.
 //!
 //! Wrapper crates (e.g. `service-kit`) that need Postgres, Redis, gossip
 //! cluster, or lease modes implement [`RateLimitProvider`] directly:

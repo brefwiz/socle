@@ -61,7 +61,7 @@ fn is_uuid_like(s: &str) -> bool {
 /// Tower layer that records RED metrics for every HTTP request.
 ///
 /// The layer owns a dedicated [`SdkMeterProvider`] built from the supplied
-/// Prometheus registry. It also installs this provider as the global OTel
+/// Prometheus registry. It also installs this provider as the global `OTel`
 /// meter provider so that [`counter`] helpers in handlers work out of the box.
 #[derive(Clone)]
 pub struct MetricsLayer {
@@ -72,6 +72,10 @@ pub struct MetricsLayer {
 
 impl MetricsLayer {
     /// Build the layer from an existing Prometheus registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Prometheus exporter fails to build.
     pub fn new(registry: prometheus::Registry) -> Result<Self, crate::Error> {
         let exporter = opentelemetry_prometheus::exporter()
             .with_registry(registry)
@@ -143,11 +147,10 @@ where
 
     fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
         let method = req.method().to_string();
-        let route = req
-            .extensions()
-            .get::<MatchedPath>()
-            .map(|mp| mp.as_str().to_owned())
-            .unwrap_or_else(|| normalize_path(req.uri().path()));
+        let route = req.extensions().get::<MatchedPath>().map_or_else(
+            || normalize_path(req.uri().path()),
+            |mp| mp.as_str().to_owned(),
+        );
 
         let start = Instant::now();
         let requests = self.requests.clone();
@@ -172,7 +175,8 @@ where
 
 // ── Public helper ─────────────────────────────────────────────────────────────
 
-/// Create (or retrieve) a named [`Counter<u64>`] from the global OTel meter.
+/// Create (or retrieve) a named [`Counter<u64>`] from the global `OTel` meter.
+#[must_use]
 pub fn counter(name: &'static str) -> Counter<u64> {
     global::meter("socle").u64_counter(name).build()
 }

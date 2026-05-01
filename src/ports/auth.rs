@@ -1,7 +1,7 @@
 //! Auth port — extension point for pluggable authentication middleware.
 //!
 //! Unlike rate-limit, socle ships **no** built-in auth backend. The
-//! authentication landscape is too varied (JWT/JWKS, OIDC, OAuth2, API keys,
+//! authentication landscape is too varied (JWT/JWKS, OIDC, `OAuth2`, API keys,
 //! mTLS, custom headers) and a default would either be useless or dangerous.
 //!
 //! Wrapper crates (e.g. `service-kit`) that need JWT + JWKS, API-key
@@ -35,7 +35,7 @@
 //! The auth layer is applied **after** the rate-limit layer and **before**
 //! any extra layers registered via `with_layer`. This means unauthenticated
 //! requests are still counted against rate limits (preventing token-brute-force
-//! DoS from escaping rate limits), and `with_layer` extensions run either
+//! `DoS` from escaping rate limits), and `with_layer` extensions run either
 //! inside or outside auth depending on registration order.
 
 /// Extension point for auth layer injection.

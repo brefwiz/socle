@@ -104,14 +104,14 @@ async fn no_event_for_healthz_path() {
     );
 }
 
+async fn bare_handler() -> impl IntoResponse {
+    StatusCode::CREATED
+}
+
 #[tokio::test]
 async fn annotation_without_slot_does_not_panic() {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let sink = Arc::new(ChannelAuditSink::new(tx));
-
-    async fn bare_handler() -> impl IntoResponse {
-        StatusCode::CREATED
-    }
 
     let app = Router::new()
         .route("/items", post(bare_handler))
