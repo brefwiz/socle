@@ -37,6 +37,7 @@ mod error;
 mod handler_error;
 mod request_id;
 
+pub mod org_context;
 pub mod org_isolation;
 pub mod org_policy;
 
@@ -106,7 +107,7 @@ pub use ports::telemetry::{BasicTelemetryProvider, TelemetryProvider};
 
 // ── api-bones re-exports ──────────────────────────────────────────────────────
 
-pub use api_bones::org_context::OrganizationContext;
+pub use crate::org_context::OrganizationContext;
 pub use api_bones::org_id::{OrgId, OrgPath};
 
 pub use api_bones::common::{ResourceId, Timestamp};

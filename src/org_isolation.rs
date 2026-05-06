@@ -14,7 +14,7 @@ use tower::{Layer, Service};
 
 use api_bones::audit::Principal;
 use api_bones::error::ApiError;
-use api_bones::org_context::OrganizationContext;
+use crate::org_context::OrganizationContext;
 use api_bones::org_id::{OrgId, OrgPath};
 use api_bones::request_id::RequestId;
 

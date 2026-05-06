@@ -332,7 +332,7 @@ where
 
         let (principal_id, org_path) = req
             .extensions()
-            .get::<api_bones::org_context::OrganizationContext>()
+            .get::<crate::org_context::OrganizationContext>()
             .map_or((None, None), |ctx| {
                 let pid = ctx.principal.as_str().to_owned();
                 let path = ctx

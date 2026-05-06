@@ -1,7 +1,7 @@
 //! Org-scoped access policy trait and default ancestry implementation.
 
 use api_bones::error::{ApiError, ErrorCode};
-use api_bones::org_context::OrganizationContext;
+use crate::org_context::OrganizationContext;
 use api_bones::org_id::OrgId;
 
 // ── OrgPolicy ────────────────────────────────────────────────────────────────

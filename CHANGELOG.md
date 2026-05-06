@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.3.0] — 2026-05-06
+
+### Changed
+
+- **Bump `api-bones` to `=5.0.0`** (from `=4.7.0`). The `org_context` module was removed from api-bones 5.0.0; `OrganizationContext`, `Role`, `RoleBinding`, `RoleScope`, `Attestation`, and `AttestationKind` now live in `socle::org_context` and are re-exported from the crate root as before.
+
 ## [3.2.0] — 2026-04-29
 
 ### Changed
