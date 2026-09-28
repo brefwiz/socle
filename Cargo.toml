@@ -99,7 +99,7 @@ sha2 = { version = "0.11", optional = true }
 zeroize = { version = "1", optional = true, features = ["derive"] }
 http = { version = "1", optional = true }
 opentelemetry_sdk = { version = "0.32", default-features = false, features = ["metrics"], optional = true }
-opentelemetry-prometheus = { version = "0.32", optional = true }
+opentelemetry-prometheus = { version = "0.33", optional = true }
 prometheus = { version = "0.14", default-features = false, optional = true }
 
 validator = { version = "0.20", features = ["derive"], optional = true }
