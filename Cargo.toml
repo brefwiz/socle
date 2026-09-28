@@ -84,7 +84,7 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 
 governor = { version = "0.10", default-features = false, features = ["std", "dashmap"], optional = true }
 
-utoipa = { version = "5", optional = true }
+utoipa = { version = "6", optional = true }
 utoipa-swagger-ui = { version = "9", default-features = false, features = ["axum", "vendored"], optional = true }
 
 dotenvy = { version = "0.15", optional = true }
